@@ -5,3 +5,5 @@ matplotlib
 scipy
 streamlit
 openpyxl
+pyperclip
+lxml
