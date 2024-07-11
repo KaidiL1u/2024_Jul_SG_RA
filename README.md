@@ -1,4 +1,4 @@
-# 🎈 Blank app template
+# Sleeping Giant 2024 Regression Analysis Crazy-Fast tool that runs more than 200 regression within 5 seconds!
 
 A simple Streamlit app template for you to modify!
 
