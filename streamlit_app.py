@@ -230,17 +230,18 @@ def main():
     app = RegressionApp()
 
     st.title("SG2024 Regression Analysis Crazy-Fast Tool")
-    st.write("### Upload Excel File:")
+
+    st.write("### Upload Xlsx Source File:")
     app.choose_file()
 
-    st.write("### Variables:")
-    app.show_variable_selection()
+    if st.button("Run Regression Scenarios"):
+        app.run_regression_scenarios()
 
     st.write("### Existing Scenarios:")
     app.display_scenarios()
 
-    if st.button("Run Regression Scenarios"):
-        app.run_regression_scenarios()
+    st.write("### Variables:")
+    app.show_variable_selection()
 
     if "results" in st.session_state:
         app.display_results_page()
