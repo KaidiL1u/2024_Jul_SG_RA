@@ -5,6 +5,7 @@ import numpy as np
 import itertools
 import warnings
 import pyperclip
+import os
 
 # Suppressing FutureWarnings regarding pandas deprecations
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -168,6 +169,26 @@ class RegressionApp:
                     pyperclip.copy(csv)
                     st.success("Data copied to clipboard!")
 
+                if st.button(f"Export {scenario_name} as Excel"):
+                    self.export_excel(summary_df, scenario_name)
+
+    def export_excel(self, df, scenario_name):
+        # Create a Pandas Excel writer using XlsxWriter as the engine.
+        excel_filename = f"{scenario_name}.xlsx"
+        sheet_name = "Sheet1"
+
+        # Save the dataframe to a writer object.
+        with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        # Download the Excel file
+        with open(excel_filename, 'rb') as f:
+            data = f.read()
+        st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
+
+        # Clean up: delete the temporary Excel file
+        os.remove(excel_filename)
+
     def run_regression(self, df):
         Y = df[self.df.columns[1]].astype(float)
         X = df[df.columns.difference(['Year', self.df.columns[1]])].astype(float)
@@ -226,4 +247,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
