@@ -117,8 +117,8 @@ class RegressionApp:
                     summary_data.append(['SUMMARY OUTPUT', ''])
                     summary_data.append([''])
                     summary_data.append(['Regression Statistics', ''])
-                    summary_data.append([f'S{combination_number}R^2', f"{model.rsquared:.4f}"])
-                    summary_data.append([f'S{combination_number}SE', f"{model.scale ** 0.5:.4f}"])
+                    summary_data.append([f'S{combination_number}Multiple R', f"{model.rsquared ** 0.5:.4f}"])
+                    summary_data.append([f'S{combination_number}R Square', f"{model.rsquared:.4f}"])
                     summary_data.append(['Adjusted R Square', f"{model.rsquared_adj:.4f}"])
                     summary_data.append(['Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['Observations', f"{int(model.nobs)}"])
@@ -157,7 +157,7 @@ class RegressionApp:
                         summary_data.append([''] * 15)
 
                     # Add three blank rows between each output
-                    for _ in range(3):
+                    for _ in range(10):
                         summary_data.append([''] * 15)
 
                 summary_df = pd.DataFrame(summary_data)
