@@ -78,14 +78,14 @@ class RegressionApp:
 
             scenario_results = []
 
-            for i, selected_x_vars in enumerate(combinations, start=1):
+            for selected_x_vars in combinations:
                 columns_to_keep = ['Year', self.df.columns[1]] + list(selected_x_vars)
                 df_selected_sub = df_selected[columns_to_keep]
                 model = self.run_regression(df_selected_sub)
                 if model:
                     output_df = self.format_regression_output(model)
                     anova_table = self.calculate_anova_table(model)
-                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, i))
+                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars))
 
             all_results.append((scenario_name, scenario_results))
 
@@ -109,18 +109,16 @@ class RegressionApp:
             with tab:
                 summary_data = []
 
-                for result in scenario_results:
-                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, combination_number = result
+                for index, result in enumerate(scenario_results):
+                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars = result
 
                     # Add selected years at the top
                     summary_data.append(['Selected Years', ', '.join(map(str, selected_years))])
                     summary_data.append(['SUMMARY OUTPUT', ''])
                     summary_data.append([''])
                     summary_data.append(['Regression Statistics', ''])
-                    summary_data.append([f'S{combination_number}Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                    summary_data.append([f'S{combination_number}R Square', f"{model.rsquared:.4f}"])
-                    summary_data.append(['Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                    summary_data.append(['Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
+                    summary_data.append([f"S{index+1}R^2", f"{model.rsquared:.4f}"])
+                    summary_data.append([f"S{index+1}SE", f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['Observations', f"{int(model.nobs)}"])
                     summary_data.append([''])
 
@@ -143,22 +141,22 @@ class RegressionApp:
                     x_vars_sorted = sorted(x_vars)
 
                     # Add 'Constant' first
-                    summary_data.append([f'S{combination_number}Const'] + [str(item) if item is not None else '' for item in constant_row[1:]])
+                    summary_data.append([f"S{index+1}Const"] + [str(item) if item is not None else '' for item in constant_row])
 
                     # Add sorted x variables
-                    for j, var in enumerate(x_vars_sorted, start=1):
+                    for i, var in enumerate(x_vars_sorted, start=1):
                         row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                        summary_data.append([f'S{combination_number}X{j}'] + [str(item) if item is not None else '' for item in row[1:]])
+                        summary_data.append([f"S{index+1}X{i}"] + [str(item) if item is not None else '' for item in row])
 
                     # Determine the number of blank rows to add
                     num_x_vars = len(selected_x_vars)
                     blank_rows_to_add = 20 - (15 + num_x_vars)
                     for _ in range(blank_rows_to_add):
-                        summary_data.append([''] * 15)
+                        summary_data.append([''] * 16)
 
                     # Add three blank rows between each output
-                    for _ in range(10):
-                        summary_data.append([''] * 15)
+                    for _ in range(12):
+                        summary_data.append([''] * 16)
 
                 summary_df = pd.DataFrame(summary_data)
 
@@ -176,46 +174,18 @@ class RegressionApp:
         # Create a Pandas Excel writer using XlsxWriter as the engine.
         excel_filename = f"{scenario_name}.xlsx"
         sheet_name = "Sheet1"
-    
+
         # Save the dataframe to a writer object.
         with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
-            # Convert specific columns to numeric
             df.to_excel(writer, sheet_name=sheet_name, index=False)
-    
-            workbook = writer.book
-            worksheet = writer.sheets[sheet_name]
-    
-            # Write headers and data while formatting numbers
-            for col_num, value in enumerate(df.columns.values):
-                worksheet.write(0, col_num, value)
-    
-            for col_num in range(1, len(df.columns)):  # Start from 1 to skip the first column (assumed to be non-numeric)
-                column = df.columns[col_num]
-                numeric_format = workbook.add_format({'num_format': '0.00'})  # Adjust '0.00' as needed
-    
-                for row_num in range(1, len(df) + 1):
-                    cell_value = df.iloc[row_num - 1, col_num]
-                    if isinstance(cell_value, (int, float)):
-                        worksheet.write_number(row_num, col_num, cell_value, numeric_format)
-                    else:
-                        worksheet.write(row_num, col_num, cell_value)
-    
+
         # Download the Excel file
         with open(excel_filename, 'rb') as f:
             data = f.read()
         st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
-    
+
         # Clean up: delete the temporary Excel file
         os.remove(excel_filename)
-
-
-    @staticmethod
-    def is_number(s):
-        try:
-            float(s)
-            return True
-        except ValueError:
-            return False
 
     def run_regression(self, df):
         Y = df[self.df.columns[1]].astype(float)
