@@ -78,14 +78,14 @@ class RegressionApp:
 
             scenario_results = []
 
-            for selected_x_vars in combinations:
+            for idx, selected_x_vars in enumerate(combinations, start=1):
                 columns_to_keep = ['Year', self.df.columns[1]] + list(selected_x_vars)
                 df_selected_sub = df_selected[columns_to_keep]
                 model = self.run_regression(df_selected_sub)
                 if model:
                     output_df = self.format_regression_output(model)
                     anova_table = self.calculate_anova_table(model)
-                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars))
+                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
 
             all_results.append((scenario_name, scenario_results))
 
@@ -112,31 +112,31 @@ class RegressionApp:
                 summary_data = []
 
                 for result in scenario_results:
-                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars = result
+                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
 
                     # Add selected years at the top
-                    summary_data.append(['Selected Years', ', '.join(map(str, selected_years))])
-                    summary_data.append(['SUMMARY OUTPUT', ''])
+                    summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
+                    summary_data.append(['', 'SUMMARY OUTPUT', ''])
                     summary_data.append([''])
-                    summary_data.append(['Regression Statistics', ''])
-                    summary_data.append(['Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                    summary_data.append(['R Square', f"{model.rsquared:.4f}"])
-                    summary_data.append(['Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                    summary_data.append(['Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
-                    summary_data.append(['Observations', f"{int(model.nobs)}"])
+                    summary_data.append(['', 'Regression Statistics', ''])
+                    summary_data.append([f"S{idx}R^2", 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
+                    summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
+                    summary_data.append([f"S{idx}R^2", 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
+                    summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
+                    summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
                     summary_data.append([''])
 
                     # Add ANOVA table
-                    summary_data.append(['ANOVA', ''])
-                    summary_data.append(['', 'df', 'SS', 'MS', 'F', 'Significance F'])
+                    summary_data.append(['', 'ANOVA', ''])
+                    summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
                     for index, row in anova_table.iterrows():
-                        summary_data.append([str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
+                        summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
                     summary_data.append([''])
 
                     # Add coefficients if available
                     if hasattr(model, 'summary') and len(model.summary().tables) > 1:
                         coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
-                        summary_data.append(['', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
+                        summary_data.append(['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
 
                         # Separate 'Constant' and other variables
                         constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
@@ -146,12 +146,12 @@ class RegressionApp:
                         x_vars_sorted = sorted(x_vars)
 
                         # Add 'Constant' first
-                        summary_data.append([str(item) if item is not None else '' for item in constant_row])
+                        summary_data.append([f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
 
                         # Add sorted x variables
                         for var in x_vars_sorted:
                             row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                            summary_data.append([str(item) if item is not None else '' for item in row])
+                            summary_data.append([f"S{idx}X{selected_x_vars.index(var) + 1}"] + [str(item) if item is not None else '' for item in row])
 
                         # Determine the number of blank rows to add
                         num_x_vars = len(selected_x_vars)
