@@ -157,7 +157,7 @@ class RegressionApp:
                         summary_data.append([''] * 15)
 
                     # Add three blank rows between each output
-                    for _ in range(3):
+                    for _ in range(10):
                         summary_data.append([''] * 15)
 
                 summary_df = pd.DataFrame(summary_data)
