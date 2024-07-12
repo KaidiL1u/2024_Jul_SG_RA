@@ -78,14 +78,14 @@ class RegressionApp:
 
             scenario_results = []
 
-            for selected_x_vars in combinations:
+            for idx, selected_x_vars in enumerate(combinations):
                 columns_to_keep = ['Year', self.df.columns[1]] + list(selected_x_vars)
                 df_selected_sub = df_selected[columns_to_keep]
                 model = self.run_regression(df_selected_sub)
                 if model:
                     output_df = self.format_regression_output(model)
                     anova_table = self.calculate_anova_table(model)
-                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars))
+                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx + 1))
 
             all_results.append((scenario_name, scenario_results))
 
@@ -110,17 +110,17 @@ class RegressionApp:
                 summary_data = []
 
                 for result in scenario_results:
-                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars = result
+                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, combination_index = result
 
                     # Add selected years at the top
                     summary_data.append(['Selected Years', ', '.join(map(str, selected_years))])
                     summary_data.append(['SUMMARY OUTPUT', ''])
                     summary_data.append([''])
                     summary_data.append(['Regression Statistics', ''])
+                    summary_data.append([f'S{combination_index}R^2', f"{model.rsquared:.4f}"])
+                    summary_data.append([f'S{combination_index}SE', f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                    summary_data.append(['R Square', f"{model.rsquared:.4f}"])
                     summary_data.append(['Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                    summary_data.append(['Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['Observations', f"{int(model.nobs)}"])
                     summary_data.append([''])
 
@@ -137,18 +137,15 @@ class RegressionApp:
 
                     # Separate 'Constant' and other variables
                     constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
-                    x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
+                    summary_data.append([f'S{combination_index}Const'] + [str(item) if item is not None else '' for item in constant_row])
 
-                    # Sort remaining x variables alphabetically
+                    x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
                     x_vars_sorted = sorted(x_vars)
 
-                    # Add 'Constant' first
-                    summary_data.append([str(item) if item is not None else '' for item in constant_row])
-
                     # Add sorted x variables
-                    for var in x_vars_sorted:
+                    for i, var in enumerate(x_vars_sorted, start=1):
                         row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                        summary_data.append([str(item) if item is not None else '' for item in row])
+                        summary_data.append([f'S{combination_index}X{i}'] + [str(item) if item is not None else '' for item in row])
 
                     # Determine the number of blank rows to add
                     num_x_vars = len(selected_x_vars)
@@ -157,7 +154,7 @@ class RegressionApp:
                         summary_data.append([''] * 15)
 
                     # Add three blank rows between each output
-                    for _ in range(12):
+                    for _ in range(2):
                         summary_data.append([''] * 15)
 
                 summary_df = pd.DataFrame(summary_data)
@@ -180,6 +177,10 @@ class RegressionApp:
         # Save the dataframe to a writer object.
         with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
             df.to_excel(writer, sheet_name=sheet_name, index=False)
+            workbook = writer.book
+            worksheet = writer.sheets[sheet_name]
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value)
 
         # Download the Excel file
         with open(excel_filename, 'rb') as f:
@@ -194,6 +195,8 @@ class RegressionApp:
         X = df[df.columns.difference(['Year', self.df.columns[1]])].astype(float)
         X = sm.add_constant(X)
         model = sm.OLS(Y, X).fit()
+
+
         return model
 
     def format_regression_output(self, model):
