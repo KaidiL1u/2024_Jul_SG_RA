@@ -153,28 +153,31 @@ class RegressionApp:
         st.experimental_rerun()
 
     def display_results_page(self):
-        if "results" not in st.session_state:
-            st.write("No results to display. Please run the regression scenarios first.")
-            return
+    if "results" not in st.session_state:
+        st.write("No results to display. Please run the regression scenarios first.")
+        return
 
-        all_results = st.session_state["results"]
+    all_results = st.session_state["results"]
 
-        tab_titles = [f"Scenario: {name}" for name, _ in all_results]
-        tabs = st.tabs(tab_titles)
+    tab_titles = [f"Scenario: {name}" for name, _ in all_results]
+    tabs = st.tabs(tab_titles)
 
-        for tab, (scenario_name, scenario_results) in zip(tabs, all_results):
-            with tab:
-                for result in scenario_results:
-                    summary_data = pd.DataFrame(result)
+    for tab, (scenario_name, scenario_results) in zip(tabs, all_results):
+        with tab:
+            for i, result in enumerate(scenario_results):
+                summary_data = pd.DataFrame(result)
 
-                    st.dataframe(summary_data.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
+                st.dataframe(summary_data.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
 
-                    if st.button(f"Copy to Clipboard {scenario_name}"):
-                        self.copy_to_clipboard(summary_data)
-                        st.success("Data copied to clipboard!")
+                # Use a unique widget key for each button based on scenario_name and index i
+                if st.button(f"Copy to Clipboard {scenario_name} - {i}", key=f"copy_button_{scenario_name}_{i}"):
+                    self.copy_to_clipboard(summary_data)
+                    st.success("Data copied to clipboard!")
 
-                    if st.button(f"Export {scenario_name} as Excel"):
-                        self.export_excel(summary_data, scenario_name)
+                # Use a unique widget key for each button based on scenario_name and index i
+                if st.button(f"Export {scenario_name} as Excel - {i}", key=f"export_button_{scenario_name}_{i}"):
+                    self.export_excel(summary_data, scenario_name)
+
 
     def copy_to_clipboard(self, df):
         try:
