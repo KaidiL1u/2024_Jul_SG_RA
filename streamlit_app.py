@@ -155,12 +155,12 @@ class RegressionApp:
 
                         # Determine the number of blank rows to add
                         num_x_vars = len(selected_x_vars)
-                        blank_rows_to_add = 20 - (15 + num_x_vars)
+                        blank_rows_to_add = 30 - (15 + num_x_vars)
                         for _ in range(blank_rows_to_add):
                             summary_data.append([''] * 15)
 
                         # Add three blank rows between each output
-                        for _ in range(3):
+                        for _ in range(5):
                             summary_data.append([''] * 15)
 
                 summary_df = pd.DataFrame(summary_data)
