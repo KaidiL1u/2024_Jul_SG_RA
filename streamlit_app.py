@@ -172,7 +172,7 @@ class RegressionApp:
                 if st.button(f"Export {scenario_name} as Excel"):
                     self.export_excel(summary_df, scenario_name)
 
-            def export_excel(self, df, scenario_name):
+    def export_excel(self, df, scenario_name):
         # Create a Pandas Excel writer using XlsxWriter as the engine.
         excel_filename = f"{scenario_name}.xlsx"
         sheet_name = "Sheet1"
@@ -276,4 +276,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-  
