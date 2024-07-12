@@ -119,9 +119,9 @@ class RegressionApp:
                     summary_data.append(['', 'SUMMARY OUTPUT', ''])
                     summary_data.append([''])
                     summary_data.append(['', 'Regression Statistics', ''])
-                    summary_data.append([f"S{idx}R^2", 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
+                    summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
                     summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
-                    summary_data.append([f"S{idx}R^2", 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
+                    summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
                     summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
                     summary_data.append([''])
@@ -149,9 +149,9 @@ class RegressionApp:
                         summary_data.append([f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
 
                         # Add sorted x variables
-                        for var in x_vars_sorted:
+                        for i, var in enumerate(x_vars_sorted, start=1):
                             row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                            summary_data.append([f"S{idx}X{selected_x_vars.index(var) + 1}"] + [str(item) if item is not None else '' for item in row])
+                            summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
 
                         # Determine the number of blank rows to add
                         num_x_vars = len(selected_x_vars)
