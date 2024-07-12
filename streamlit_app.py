@@ -133,34 +133,35 @@ class RegressionApp:
                         summary_data.append([str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
                     summary_data.append([''])
 
-                    # Add coefficients
-                    summary_data.append(['', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
-                    coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[1].reset_index()
+                    # Add coefficients if available
+                    if hasattr(model, 'summary') and len(model.summary().tables) > 1:
+                        coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
+                        summary_data.append(['', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
 
-                    # Separate 'Constant' and other variables
-                    constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
-                    x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
+                        # Separate 'Constant' and other variables
+                        constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
+                        x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
 
-                    # Sort remaining x variables alphabetically
-                    x_vars_sorted = sorted(x_vars)
+                        # Sort remaining x variables alphabetically
+                        x_vars_sorted = sorted(x_vars)
 
-                    # Add 'Constant' first
-                    summary_data.append([str(item) if item is not None else '' for item in constant_row])
+                        # Add 'Constant' first
+                        summary_data.append([str(item) if item is not None else '' for item in constant_row])
 
-                    # Add sorted x variables
-                    for var in x_vars_sorted:
-                        row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                        summary_data.append([str(item) if item is not None else '' for item in row])
+                        # Add sorted x variables
+                        for var in x_vars_sorted:
+                            row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
+                            summary_data.append([str(item) if item is not None else '' for item in row])
 
-                    # Determine the number of blank rows to add
-                    num_x_vars = len(selected_x_vars)
-                    blank_rows_to_add = 20 - (15 + num_x_vars)
-                    for _ in range(blank_rows_to_add):
-                        summary_data.append([''] * 15)
+                        # Determine the number of blank rows to add
+                        num_x_vars = len(selected_x_vars)
+                        blank_rows_to_add = 20 - (15 + num_x_vars)
+                        for _ in range(blank_rows_to_add):
+                            summary_data.append([''] * 15)
 
-                    # Add three blank rows between each output
-                    for _ in range(3):
-                        summary_data.append([''] * 15)
+                        # Add three blank rows between each output
+                        for _ in range(3):
+                            summary_data.append([''] * 15)
 
                 summary_df = pd.DataFrame(summary_data)
 
