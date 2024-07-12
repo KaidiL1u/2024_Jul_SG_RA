@@ -191,12 +191,8 @@ class RegressionApp:
             for row_num in range(1, len(df) + 1):
                 for col_num in range(len(df.columns)):
                     cell_value = df.iloc[row_num - 1, col_num]
-                    if col_num > 0 and self.is_number(cell_value):  # Skip first column which contains text identifiers
-                        try:
-                            cell_value = float(cell_value)
-                            worksheet.write_number(row_num, col_num, cell_value)
-                        except ValueError:
-                            worksheet.write(row_num, col_num, cell_value)
+                    if col_num > 0 and isinstance(cell_value, (int, float)):
+                        worksheet.write_number(row_num, col_num, cell_value)
                     else:
                         worksheet.write(row_num, col_num, cell_value)
 
