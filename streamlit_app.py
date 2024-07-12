@@ -181,18 +181,24 @@ class RegressionApp:
         with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-            # Convert all columns to numeric
+            # Convert specific columns to numeric
             workbook = writer.book
             worksheet = writer.sheets[sheet_name]
+
+            # Write headers and data while formatting numbers
             for col_num, value in enumerate(df.columns.values):
                 worksheet.write(0, col_num, value)
-            for row_num in range(1, len(df)+1):
-                for col_num in range(1, len(df.columns)):
-                    try:
-                        value = float(df.iloc[row_num-1, col_num])
-                        worksheet.write_number(row_num, col_num, value)
-                    except ValueError:
-                        worksheet.write(row_num, col_num, df.iloc[row_num-1, col_num])
+            for row_num in range(1, len(df) + 1):
+                for col_num in range(len(df.columns)):
+                    cell_value = df.iloc[row_num - 1, col_num]
+                    if col_num > 0 and self.is_number(cell_value):  # Skip first column which contains text identifiers
+                        try:
+                            cell_value = float(cell_value)
+                            worksheet.write_number(row_num, col_num, cell_value)
+                        except ValueError:
+                            worksheet.write(row_num, col_num, cell_value)
+                    else:
+                        worksheet.write(row_num, col_num, cell_value)
 
         # Download the Excel file
         with open(excel_filename, 'rb') as f:
@@ -201,6 +207,14 @@ class RegressionApp:
 
         # Clean up: delete the temporary Excel file
         os.remove(excel_filename)
+
+    @staticmethod
+    def is_number(s):
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False
 
     def run_regression(self, df):
         Y = df[self.df.columns[1]].astype(float)
