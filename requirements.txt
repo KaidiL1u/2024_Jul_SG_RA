@@ -8,3 +8,4 @@ openpyxl
 pyperclip
 lxml
 xlsxwriter
+itertools
