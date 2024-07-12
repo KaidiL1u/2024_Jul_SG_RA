@@ -72,20 +72,20 @@ class RegressionApp:
             variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
             num_variables = len(variables)
 
-            combinations = itertools.chain.from_iterable(
+            combinations = list(itertools.chain.from_iterable(
                 itertools.combinations(variables, r) for r in range(1, num_variables + 1)
-            )
+            ))
 
             scenario_results = []
 
-            for selected_x_vars in combinations:
+            for idx, selected_x_vars in enumerate(combinations, start=1):
                 columns_to_keep = ['Year', self.df.columns[1]] + list(selected_x_vars)
                 df_selected_sub = df_selected[columns_to_keep]
                 model = self.run_regression(df_selected_sub)
                 if model:
                     output_df = self.format_regression_output(model)
                     anova_table = self.calculate_anova_table(model)
-                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars))
+                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
 
             all_results.append((scenario_name, scenario_results))
 
@@ -110,17 +110,16 @@ class RegressionApp:
                 summary_data = []
 
                 for result in scenario_results:
-                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars = result
+                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
 
                     # Add selected years at the top
                     summary_data.append(['Selected Years', ', '.join(map(str, selected_years))])
                     summary_data.append(['SUMMARY OUTPUT', ''])
                     summary_data.append([''])
                     summary_data.append(['Regression Statistics', ''])
-                    summary_data.append(['Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                    summary_data.append(['R Square', f"{model.rsquared:.4f}"])
-                    summary_data.append(['Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                    summary_data.append(['Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
+                    summary_data.append([f"S{idx}R Square", f"{model.rsquared:.4f}"])
+                    summary_data.append([f"S{idx}Adjusted R Square", f"{model.rsquared_adj:.4f}"])
+                    summary_data.append([f"S{idx}Standard Error of the Regression", f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['Observations', f"{int(model.nobs)}"])
                     summary_data.append([''])
 
@@ -143,12 +142,12 @@ class RegressionApp:
                     x_vars_sorted = sorted(x_vars)
 
                     # Add 'Constant' first
-                    summary_data.append([str(item) if item is not None else '' for item in constant_row])
+                    summary_data.append([f"S{idx}const"] + [str(item) if item is not None else '' for item in constant_row])
 
                     # Add sorted x variables
                     for var in x_vars_sorted:
                         row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                        summary_data.append([str(item) if item is not None else '' for item in row])
+                        summary_data.append([f"S{idx}{var}"] + [str(item) if item is not None else '' for item in row])
 
                     # Determine the number of blank rows to add
                     num_x_vars = len(selected_x_vars)
@@ -165,12 +164,19 @@ class RegressionApp:
                 st.dataframe(summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
 
                 if st.button(f"Copy to Clipboard {scenario_name}"):
-                    csv = summary_df.to_csv(sep='\t', index=False, header=False)
-                    pyperclip.copy(csv)
-                    st.success("Data copied to clipboard!")
+                    self.copy_to_clipboard(summary_df)
 
                 if st.button(f"Export {scenario_name} as Excel"):
                     self.export_excel(summary_df, scenario_name)
+
+    def copy_to_clipboard(self, df):
+        # Convert DataFrame to tab-separated values and copy to clipboard
+        csv = df.to_csv(sep='\t', index=False, header=False)
+        try:
+            pyperclip.copy(csv)
+            st.success("Data copied to clipboard!")
+        except pyperclip.PyperclipException as e:
+            st.error(f"Copying to clipboard failed: {str(e)}")
 
     def export_excel(self, df, scenario_name):
         # Create a Pandas Excel writer using XlsxWriter as the engine.
