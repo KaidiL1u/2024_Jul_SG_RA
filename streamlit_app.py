@@ -4,7 +4,7 @@ import statsmodels.api as sm
 import numpy as np
 import itertools
 import warnings
-import pyperclip
+import pyperclip  # Ensure pyperclip is installed
 import os
 
 # Suppressing FutureWarnings regarding pandas deprecations
@@ -168,86 +168,64 @@ class RegressionApp:
                 st.dataframe(summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
 
                 if st.button(f"Copy to Clipboard {scenario_name}"):
-                    csv = summary_df.to_csv(sep='\t', index=False, header=False)
-                    pyperclip.copy(csv)
-                    st.success("Data copied to clipboard!")
+                    try:
+                        csv = summary_df.to_csv(sep='\t', index=False, header=False)
+                        pyperclip.copy(csv)
+                        st.success("Data copied to clipboard!")
+                    except pyperclip.PyperclipException as e:
+                        st.error("Copying to clipboard failed. Please use another method to copy the data.")
 
                 if st.button(f"Export {scenario_name} as Excel"):
                     self.export_excel(summary_df, scenario_name)
 
-    def export_excel(self, df, scenario_name):
-        # Create a Pandas Excel writer using XlsxWriter as the engine.
-        excel_filename = f"{scenario_name}.xlsx"
-        sheet_name = "Sheet1"
-
-        # Save the dataframe to a writer object.
-        with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-        # Download the Excel file
-        with open(excel_filename, 'rb') as f:
-            data = f.read()
-        st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
-
-        # Clean up: delete the temporary Excel file
-        os.remove(excel_filename)
-
     def run_regression(self, df):
-        Y = df[self.df.columns[1]].astype(float)
-        X = df[df.columns.difference(['Year', self.df.columns[1]])].astype(float)
-        X = sm.add_constant(X)
-        model = sm.OLS(Y, X).fit()
-        return model
+        # Replace with your own regression logic based on the dataframe `df`
+        try:
+            y = df[df.columns[1]]
+            X = df[df.columns[2:]]
+            X = sm.add_constant(X)
+            model = sm.OLS(y, X).fit()
+            return model
+        except Exception as e:
+            st.error(f"Error occurred during regression: {str(e)}")
+            return None
 
     def format_regression_output(self, model):
-        summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
-        return summary_df
+        # Replace with your own formatting logic based on the regression `model`
+        output_df = pd.DataFrame({
+            "Coefficient": model.params,
+            "Standard Error": model.bse,
+            "t value": model.tvalues,
+            "P value": model.pvalues
+        })
+        return output_df
 
     def calculate_anova_table(self, model):
-        sse = model.ssr  # Sum of squared residuals
-        ssr = model.ess  # Explained sum of squares
-        sst = ssr + sse  # Total sum of squares
-        dfe = model.df_resid  # Degrees of freedom for error
-        dfr = model.df_model  # Degrees of freedom for regression
-        dft = dfr + dfe  # Total degrees of freedom
-
-        mse = sse / dfe  # Mean squared error
-        msr = ssr / dfr  # Mean squared regression
-
-        f_stat = msr / mse  # F-statistic
-        p_value = model.f_pvalue  # P-value for the F-statistic
-
-        anova_table = pd.DataFrame({
-            'df': [dfr, dfe, dft],
-            'SS': [ssr, sse, sst],
-            'MS': [msr, mse, np.nan],
-            'F': [f_stat, np.nan, np.nan],
-            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
-        }, index=['Regression', 'Residual', 'Total'])
-
+        # Replace with your own ANOVA calculation logic based on the regression `model`
+        anova_table = sm.stats.anova_lm(model, typ=2)
         return anova_table
 
-def main():
-    st.set_page_config(layout="wide")
+    def export_excel(self, df, scenario_name):
+        # Replace with your own logic to export dataframe `df` to Excel
+        file_path = f"{scenario_name}_results.xlsx"
+        df.to_excel(file_path, index=False)
+        st.success(f"Data exported successfully to {file_path}")
 
-    app = RegressionApp()
+    def run(self):
+        st.title("Regression Analysis App")
 
-    st.title("SG2024 Regression Analysis Crazy-Fast Tool")
+        self.choose_file()
 
-    st.write("### Upload Xlsx Source File:")
-    app.choose_file()
+        if self.df is not None:
+            st.write("### File Uploaded Successfully!")
+            self.show_variable_selection()
+            self.display_scenarios()
 
-    if st.button("Run Regression Scenarios"):
-        app.run_regression_scenarios()
+            if st.button("Run Regression Scenarios"):
+                self.run_regression_scenarios()
 
-    st.write("### Existing Scenarios:")
-    app.display_scenarios()
-
-    st.write("### Variables:")
-    app.show_variable_selection()
-
-    if "results" in st.session_state:
-        app.display_results_page()
+            self.display_results_page()
 
 if __name__ == "__main__":
-    main()
+    app = RegressionApp()
+    app.run()
