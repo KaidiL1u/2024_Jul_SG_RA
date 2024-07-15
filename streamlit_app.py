@@ -149,7 +149,7 @@ class RegressionApp:
 
                         # Add sorted x variables
                         for i, var in enumerate(x_vars_sorted, start=1):
-                            row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
+                            row = coeff_table[coeff.table.iloc[:, 0] == var].iloc[0].tolist()
                             summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
 
                         # Determine the number of blank rows to add
@@ -166,7 +166,7 @@ class RegressionApp:
 
                 st.dataframe(summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
 
-                copy_button = f'''
+                copy_button = f"""
                     <button onclick="copyToClipboard('copy_data_{scenario_name}')">Copy to Clipboard {scenario_name}</button>
                     <textarea id="copy_data_{scenario_name}" style="display:none;">{summary_df.to_csv(sep='\t', index=False, header=False)}</textarea>
                     <script>
@@ -179,7 +179,7 @@ class RegressionApp:
                             alert("Copied to clipboard!");
                         }}
                     </script>
-                '''
+                """
                 st.markdown(copy_button, unsafe_allow_html=True)
 
                 if st.button(f"Export {scenario_name} as Excel"):
