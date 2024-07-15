@@ -160,7 +160,7 @@ class RegressionApp:
                             summary_data.append([''] * 10)
 
                         # Add x no.of blank rows between each output
-                        for _ in range(2): ' replace the number in here as x
+                        for _ in range(2): # replace the number in here as x
                             summary_data.append([''] * 10)
 
                 summary_df = pd.DataFrame(summary_data)
