@@ -4,7 +4,6 @@ import statsmodels.api as sm
 import numpy as np
 import itertools
 import warnings
-import pyperclip
 import os
 
 # Suppressing FutureWarnings regarding pandas deprecations
@@ -167,10 +166,21 @@ class RegressionApp:
 
                 st.dataframe(summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
 
-                if st.button(f"Copy to Clipboard {scenario_name}"):
-                    csv = summary_df.to_csv(sep='\t', index=False, header=False)
-                    pyperclip.copy(csv)
-                    st.success("Data copied to clipboard!")
+                copy_button = f'''
+                    <button onclick="copyToClipboard('copy_data_{scenario_name}')">Copy to Clipboard {scenario_name}</button>
+                    <textarea id="copy_data_{scenario_name}" style="display:none;">{summary_df.to_csv(sep='\t', index=False, header=False)}</textarea>
+                    <script>
+                        function copyToClipboard(id) {{
+                            var copyText = document.getElementById(id);
+                            copyText.style.display = "block";
+                            copyText.select();
+                            document.execCommand("copy");
+                            copyText.style.display = "none";
+                            alert("Copied to clipboard!");
+                        }}
+                    </script>
+                '''
+                st.markdown(copy_button, unsafe_allow_html=True)
 
                 if st.button(f"Export {scenario_name} as Excel"):
                     self.export_excel(summary_df, scenario_name)
