@@ -31,6 +31,8 @@ class RegressionApp:
         if file:
             self.df = pd.read_excel(file)
             self.variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
+            st.write("### Columns in the uploaded file:")
+            st.write(self.df.columns.tolist())
 
     def show_variable_selection(self):
         if self.df is None:
@@ -59,6 +61,11 @@ class RegressionApp:
     def run_regression_scenarios(self):
         if self.df is None:
             st.warning("Please upload an Excel file first.")
+            return
+
+        # Check if 'Year' column exists
+        if 'Year' not in self.df.columns:
+            st.error("The 'Year' column is missing from the uploaded file.")
             return
 
         all_results = []
