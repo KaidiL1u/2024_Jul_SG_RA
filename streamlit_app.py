@@ -29,7 +29,7 @@ class RegressionApp:
     def choose_file(self):
         file = st.file_uploader("Upload Excel file", type=["xlsx"])
         if file:
-            self.df = pd.read_excel(file)
+            self.df = pd.read_excel(file, sheet_name="Sheet1")
             self.variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
             st.write("### Columns in the uploaded file:")
             st.write(self.df.columns.tolist())
