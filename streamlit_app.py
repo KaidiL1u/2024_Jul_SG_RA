@@ -177,9 +177,7 @@ class RegressionApp:
                     st.session_state[f"{scenario_name}_csv"] = csv
                     st.success("Data prepared for clipboard copying. Click the button below to copy.")
                     if st.button("Copy Now"):
-                        st.write(f"Copy the data manually from here:\n\n
-\n{csv}\n
-")
+                        st.write(f"Copy the data manually from here:\n\n{csv}\n")
 
                 if st.button(f"Export {scenario_name} as Excel"):
                     self.export_excel(summary_df, scenario_name)
