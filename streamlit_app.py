@@ -6,7 +6,6 @@ import itertools
 import warnings
 import os
 import time
-from multiprocessing import Pool
 
 # Suppressing FutureWarnings regarding pandas deprecations
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -21,8 +20,7 @@ predefined_years = {
     "2001-2023 excluding 2009, 2013, 2020, 2021, 2022": [year for year in range(2001, 2024) if year not in {2009, 2013, 2020, 2021, 2022}]
 }
 
-def run_single_regression(args):
-    df, y_var, x_vars = args
+def run_single_regression(df, y_var, x_vars):
     Y = df[y_var].astype(float)
     X = df[x_vars].astype(float)
     X = sm.add_constant(X)
@@ -83,7 +81,6 @@ class RegressionApp:
             return
 
         all_results = []
-        pool = Pool()
 
         self.start_time = time.time()
 
@@ -104,24 +101,15 @@ class RegressionApp:
 
             scenario_results = []
 
-            batch_size = 100  # Process in batches to avoid overloading
-            for i in range(0, len(combinations), batch_size):
-                batch_combinations = combinations[i:i + batch_size]
-                args = [(df_selected, self.df.columns[1], list(comb)) for comb in batch_combinations]
-                models = pool.map(run_single_regression, args)
-
-                for idx, model in enumerate(models):
-                    selected_x_vars = batch_combinations[idx]
-                    output_df = self.format_regression_output(model)
-                    anova_table = self.calculate_anova_table(model)
-                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
-                    self.completed_regressions += 1
-                    self.update_progress(progress_bar, progress_text)
+            for idx, selected_x_vars in enumerate(combinations, start=1):
+                model = run_single_regression(df_selected, self.df.columns[1], list(selected_x_vars))
+                output_df = self.format_regression_output(model)
+                anova_table = self.calculate_anova_table(model)
+                scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
+                self.completed_regressions += 1
+                self.update_progress(progress_bar, progress_text)
 
             all_results.append((scenario_name, scenario_results))
-
-        pool.close()
-        pool.join()
 
         self.show_combined_results_window(all_results)
 
