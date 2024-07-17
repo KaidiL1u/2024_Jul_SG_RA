@@ -286,6 +286,7 @@ class RegressionApp:
 
         return anova_table
 
+
 def main():
     st.set_page_config(layout="wide")
 
@@ -307,9 +308,9 @@ def main():
     if "results" in st.session_state:
         app.display_results_page()
 
-    # Initialize download after checking if files are ready
-    if "download_files" in st.session_state and st.session_state.download_files:
-        for excel_filename in st.session_state.download_files:
+    # Ensure the download button logic is correctly placed and checks the session state for files
+    if hasattr(app, 'download_files') and app.download_files:
+        for excel_filename in app.download_files:
             with open(excel_filename, 'rb') as f:
                 data = f.read()
             st.download_button(label=f"Download {excel_filename}", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -317,3 +318,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
