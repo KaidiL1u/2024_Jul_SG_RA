@@ -126,8 +126,9 @@ class RegressionApp:
         elapsed_time = time.time() - self.start_time
         estimated_total_time = (elapsed_time / self.completed_regressions) * self.total_regressions
         time_left = estimated_total_time - elapsed_time
-        progress_text = f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. Time left: {time_left:.2f} seconds."
-        st.write(progress_text)
+        progress_text = f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. " \
+                        f"Time left: {time_left:.2f} seconds. Records left to run: {self.total_regressions - self.completed_regressions}."
+        st.session_state.progress_text = progress_text
 
     def show_combined_results_window(self, all_results):
         st.session_state["results"] = all_results
@@ -139,12 +140,6 @@ class RegressionApp:
             return
 
         all_results = st.session_state["results"]
-        total_regressions = sum(len(scenario[1]) for scenario in all_results)
-        completed_regressions = sum(len(scenario[1]) for scenario in all_results)
-
-        # Display progress
-        progress_text = f"Completed {completed_regressions} out of {total_regressions} regressions"
-        st.write(progress_text)
 
         # Prepare to display up to 5 scenarios
         num_tabs = min(5, len(all_results))
@@ -271,11 +266,10 @@ def main():
     app.choose_file()
 
     if st.button("Run Regression Scenarios"):
-        start_time = time.time()
         app.run_regression_scenarios()
-        end_time = time.time()
-        st.session_state["start_time"] = start_time
-        st.session_state["end_time"] = end_time
+
+    if "progress_text" in st.session_state:
+        st.write(st.session_state.progress_text)
 
     st.write("### Existing Scenarios:")
     app.display_scenarios()
@@ -285,10 +279,6 @@ def main():
 
     if "results" in st.session_state:
         app.display_results_page()
-
-    if "start_time" in st.session_state and "end_time" in st.session_state:
-        total_time = st.session_state["end_time"] - st.session_state["start_time"]
-        st.write(f"Total time taken: {total_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()
