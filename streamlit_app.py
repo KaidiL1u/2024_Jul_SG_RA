@@ -6,6 +6,7 @@ import itertools
 import warnings
 import os
 import time
+from multiprocessing import Pool
 
 # Suppressing FutureWarnings regarding pandas deprecations
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -20,12 +21,23 @@ predefined_years = {
     "2001-2023 excluding 2009, 2013, 2020, 2021, 2022": [year for year in range(2001, 2024) if year not in {2009, 2013, 2020, 2021, 2022}]
 }
 
+def run_single_regression(args):
+    df, y_var, x_vars = args
+    Y = df[y_var].astype(float)
+    X = df[x_vars].astype(float)
+    X = sm.add_constant(X)
+    model = sm.OLS(Y, X).fit()
+    return model
+
 class RegressionApp:
     def __init__(self):
         self.df = None
         self.variables = []
         self.scenarios = dict(predefined_years)
         self.num_combinations = 0
+        self.total_regressions = 0
+        self.completed_regressions = 0
+        self.start_time = None
 
     def choose_file(self):
         file = st.file_uploader("Upload Excel file", type=["xlsx"])
@@ -42,10 +54,10 @@ class RegressionApp:
 
         self.variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
         self.num_combinations = sum([len(list(itertools.combinations(self.variables, i))) for i in range(1, len(self.variables) + 1)])
-        total_regressions = 5 * self.num_combinations
+        self.total_regressions = 5 * self.num_combinations
 
         st.subheader(f"{len(self.variables)} variables found.")
-        st.subheader(f"Regression will create {self.num_combinations} variable combinations (Total Regressions: {total_regressions}).")
+        st.subheader(f"Regression will create {self.num_combinations} variable combinations (Total Regressions: {self.total_regressions}).")
 
         st.write("### Variables:")
         for var in self.variables:
@@ -58,7 +70,7 @@ class RegressionApp:
         for name, years in self.scenarios.items():
             scenario_df.loc[name] = ['•' if year in years else '' for year in all_years]
 
-        st.table(scenario_df.T.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
+        st.table(scenario_df.T)
 
     def run_regression_scenarios(self):
         if self.df is None:
@@ -71,6 +83,9 @@ class RegressionApp:
             return
 
         all_results = []
+        pool = Pool()
+
+        self.start_time = time.time()
 
         for scenario_name, years in self.scenarios.items():
             if not years:  # If years selection is empty, use predefined years
@@ -80,24 +95,39 @@ class RegressionApp:
             variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
             num_variables = len(variables)
 
-            combinations = itertools.chain.from_iterable(
+            combinations = list(itertools.chain.from_iterable(
                 itertools.combinations(variables, r) for r in range(1, num_variables + 1)
-            )
+            ))
 
             scenario_results = []
 
-            for idx, selected_x_vars in enumerate(combinations, start=1):
-                columns_to_keep = ['Year', self.df.columns[1]] + list(selected_x_vars)
-                df_selected_sub = df_selected[columns_to_keep]
-                model = self.run_regression(df_selected_sub)
-                if model:
+            batch_size = 100  # Process in batches to avoid overloading
+            for i in range(0, len(combinations), batch_size):
+                batch_combinations = combinations[i:i + batch_size]
+                args = [(df_selected, self.df.columns[1], list(comb)) for comb in batch_combinations]
+                models = pool.map(run_single_regression, args)
+
+                for idx, model in enumerate(models):
+                    selected_x_vars = batch_combinations[idx]
                     output_df = self.format_regression_output(model)
                     anova_table = self.calculate_anova_table(model)
                     scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
+                    self.completed_regressions += 1
+                    self.update_progress()
 
             all_results.append((scenario_name, scenario_results))
 
+        pool.close()
+        pool.join()
+
         self.show_combined_results_window(all_results)
+
+    def update_progress(self):
+        elapsed_time = time.time() - self.start_time
+        estimated_total_time = (elapsed_time / self.completed_regressions) * self.total_regressions
+        time_left = estimated_total_time - elapsed_time
+        progress_text = f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. Time left: {time_left:.2f} seconds."
+        st.write(progress_text)
 
     def show_combined_results_window(self, all_results):
         st.session_state["results"] = all_results
@@ -129,27 +159,25 @@ class RegressionApp:
                     output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
 
                     # Add selected years at the top
-                    summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
-                    summary_data.append(['', 'SUMMARY OUTPUT', ''])
+                    summary_data.append(['Selected Years', ', '.join(map(str, selected_years))])
+                    summary_data.append(['SUMMARY OUTPUT'])
                     
-                    summary_data.append(['', 'Regression Statistics', ''])
-                    summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                    summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
-                    summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                    summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
-                    summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
+                    summary_data.append(['Regression Statistics'])
+                    summary_data.append(['Multiple R', f"{model.rsquared ** 0.5:.4f}"])
+                    summary_data.append(['R Square', f"{model.rsquared:.4f}"])
+                    summary_data.append(['Adjusted R Square', f"{model.rsquared_adj:.4f}"])
+                    summary_data.append(['Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
+                    summary_data.append(['Observations', f"{int(model.nobs)}"])
                     
-
                     # Add ANOVA table
-                    summary_data.append(['', 'ANOVA', ''])
-                    summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
+                    summary_data.append(['ANOVA'])
+                    summary_data.append(['', 'df', 'SS', 'MS', 'F', 'Significance F'])
                     for index, row in anova_table.iterrows():
-                        summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
-                    
+                        summary_data.append([str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
 
                     # Add coefficients if available
                     coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
-                    summary_data.append(['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
+                    summary_data.append(['Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
 
                     # Separate 'Constant' and other variables
                     constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
@@ -159,16 +187,16 @@ class RegressionApp:
                     x_vars_sorted = sorted(x_vars)
 
                     # Add 'Constant' first
-                    summary_data.append([f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
+                    summary_data.append(['Constant'] + [str(item) if item is not None else '' for item in constant_row])
 
                     # Add sorted x variables
-                    for i, var in enumerate(x_vars_sorted, start=1):
+                    for var in x_vars_sorted:
                         row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                        summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
+                        summary_data.append([var] + [str(item) if item is not None else '' for item in row])
 
                 summary_df = pd.DataFrame(summary_data)
 
-                st.table(summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
+                st.dataframe(summary_df)
 
                 if st.button(f"Copy to Clipboard {scenario_name}"):
                     csv = summary_df.to_csv(sep='\t', index=False, header=False)
