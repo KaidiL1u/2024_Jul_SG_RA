@@ -167,14 +167,14 @@ class RegressionApp:
                     summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
                     summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
- 
+
 
                     # Add ANOVA table
                     summary_data.append(['', 'ANOVA', ''])
                     summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
                     for index, row in anova_table.iterrows():
                         summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
-                    
+
 
                     # Add coefficients if available
                     coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
@@ -199,7 +199,7 @@ class RegressionApp:
 
                 st.dataframe(summary_df)
 
-    def export_to_excel(self, scenario_name, scenario_results):
+    def export_and_download_excel(self, scenario_name, scenario_results):
         summary_data = []
 
         for result in scenario_results:
@@ -250,7 +250,13 @@ class RegressionApp:
         with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
             summary_df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-        return excel_filename, summary_df
+        # Read the file data and remove the file after reading
+        with open(excel_filename, 'rb') as f:
+            data = f.read()
+        os.remove(excel_filename)
+
+        # Initiate the download
+        st.download_button(label=f"Download {scenario_name} Excel File", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
     def format_regression_output(self, model):
         summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
@@ -285,7 +291,7 @@ def main():
 
     app = RegressionApp()
 
-    st.title("SG2024 Regression Analysis Tool")
+    st.title("SG2024 Regression Analysis Crazy-Fast Tool CAREFUL OF MENTAL MELTDOWN IF DATA TOO BIG")
 
     st.write("### Upload Xlsx Source File:")
     app.choose_file()
@@ -308,12 +314,11 @@ def main():
 
         all_results = st.session_state["results"]
         for scenario_name, scenario_results in all_results:
-            if st.button(f"Download {scenario_name} Excel File"):
-                excel_filename, summary_df = app.export_to_excel(scenario_name, scenario_results)
-                with open(excel_filename, 'rb') as f:
-                    data = f.read()
-                st.download_button(label=f"Download {scenario_name} Excel File", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                os.remove(excel_filename)
+            st.button(
+                f"Download {scenario_name} Excel File",
+                on_click=app.export_and_download_excel,
+                args=(scenario_name, scenario_results)
+            )
 
 if __name__ == "__main__":
     main()
