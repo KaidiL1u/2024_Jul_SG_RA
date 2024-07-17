@@ -164,14 +164,12 @@ class RegressionApp:
                     summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
                     summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
- 
 
                     # Add ANOVA table
                     summary_data.append(['', 'ANOVA', ''])
                     summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
                     for index, row in anova_table.iterrows():
                         summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
-                    
 
                     # Add coefficients if available
                     coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
@@ -192,37 +190,22 @@ class RegressionApp:
                         row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
                         summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
 
-
                 summary_df = pd.DataFrame(summary_data)
 
                 st.dataframe(summary_df)
 
-                if st.button(f"Copy to Clipboard {scenario_name}"):
-                    csv = summary_df.to_csv(sep='\t', index=False, header=False)
-                    st.session_state[f"{scenario_name}_csv"] = csv
-                    st.success("Data prepared for clipboard copying. Click the button below to copy.")
-                    if st.button("Copy Now"):
-                        st.write(f"Copy the data manually from here:\n\n{csv}\n")
+                csv = summary_df.to_csv(sep='\t', index=False, header=False)
+                excel_filename = f"{scenario_name}.xlsx"
+                with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
+                    summary_df.to_excel(writer, sheet_name="Sheet1", index=False)
 
-                if st.button(f"Export {scenario_name} as Excel"):
-                    self.export_excel(summary_df, scenario_name)
+                with open(excel_filename, 'rb') as f:
+                    data = f.read()
 
-    def export_excel(self, df, scenario_name):
-        # Create a Pandas Excel writer using XlsxWriter as the engine.
-        excel_filename = f"{scenario_name}.xlsx"
-        sheet_name = "Sheet1"
+                st.download_button(label=f"Export {scenario_name} as Excel", data=data, file_name=excel_filename)
 
-        # Save the dataframe to a writer object.
-        with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-        # Download the Excel file
-        with open(excel_filename, 'rb') as f:
-            data = f.read()
-        st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
-
-        # Clean up: delete the temporary Excel file
-        os.remove(excel_filename)
+                # Clean up: delete the temporary Excel file
+                os.remove(excel_filename)
 
     def run_regression(self, df):
         Y = df[self.df.columns[1]].astype(float)
