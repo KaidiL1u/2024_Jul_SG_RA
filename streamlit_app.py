@@ -21,6 +21,63 @@ predefined_years = {
     "2001-2023 excluding 2009, 2013, 2020, 2021, 2022": [year for year in range(2001, 2024) if year not in {2009, 2013, 2020, 2021, 2022}]
 }
 
+def run_regression(df, y_col, selected_x_vars):
+    Y = df[y_col].astype(float)
+    X = df[selected_x_vars].astype(float)
+    X = sm.add_constant(X)
+    model = sm.OLS(Y, X).fit()
+    return model
+
+def format_regression_output(model):
+    summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
+    return summary_df
+
+def calculate_anova_table(model):
+    sse = model.ssr  # Sum of squared residuals
+    ssr = model.ess  # Explained sum of squares
+    sst = ssr + sse  # Total sum of squares
+    dfe = model.df_resid  # Degrees of freedom for error
+    dfr = model.df_model  # Degrees of freedom for regression
+    dft = dfr + dfe  # Total degrees of freedom
+
+    mse = sse / dfe  # Mean squared error
+    msr = ssr / dfr  # Mean squared regression
+
+    f_stat = msr / mse  # F-statistic
+    p_value = model.f_pvalue  # P-value for the F-statistic
+
+    anova_table = pd.DataFrame({
+        'df': [dfr, dfe, dft],
+        'SS': [ssr, sse, sst],
+        'MS': [msr, mse, np.nan],
+        'F': [f_stat, np.nan, np.nan],
+        'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
+    }, index=['Regression', 'Residual', 'Total'])
+
+    return anova_table
+
+def process_scenario(scenario_name, years, df, y_col):
+    df_selected = df[df['Year'].isin(years)]
+    variables = df.columns[2:].tolist()  # Assuming variables start from column C onwards
+    num_variables = len(variables)
+
+    combinations = itertools.chain.from_iterable(
+        itertools.combinations(variables, r) for r in range(1, num_variables + 1)
+    )
+
+    scenario_results = []
+
+    for idx, selected_x_vars in enumerate(combinations, start=1):
+        columns_to_keep = ['Year', y_col] + list(selected_x_vars)
+        df_selected_sub = df_selected[columns_to_keep]
+        model = run_regression(df_selected_sub, y_col, selected_x_vars)
+        if model:
+            output_df = format_regression_output(model)
+            anova_table = calculate_anova_table(model)
+            scenario_results.append((output_df, years, y_col, model, anova_table, selected_x_vars, idx))
+
+    return scenario_name, scenario_results
+
 class RegressionApp:
     def __init__(self):
         self.df = None
@@ -85,43 +142,23 @@ class RegressionApp:
         progress_bar = st.progress(0)
         progress_text = st.empty()
 
-        def process_scenario(scenario_name, years):
-            df_selected = self.df[self.df['Year'].isin(years)]
-            variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
-            num_variables = len(variables)
-
-            combinations = itertools.chain.from_iterable(
-                itertools.combinations(variables, r) for r in range(1, num_variables + 1)
-            )
-
-            scenario_results = []
-
-            for idx, selected_x_vars in enumerate(combinations, start=1):
-                columns_to_keep = ['Year', self.df.columns[1]] + list(selected_x_vars)
-                df_selected_sub = df_selected[columns_to_keep]
-                model = self.run_regression(df_selected_sub)
-                if model:
-                    output_df = self.format_regression_output(model)
-                    anova_table = self.calculate_anova_table(model)
-                    scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
-
-                # Update progress
-                elapsed_time = time.time() - start_time
-                progress = min((elapsed_time / estimated_time) * 100, 100)
-                progress_bar.progress(progress)
-                progress_text.write(f"Processing: {int(progress)}% complete")
-
-            return scenario_name, scenario_results
+        def update_progress():
+            elapsed_time = time.time() - start_time
+            progress = min((elapsed_time / estimated_time) * 100, 100)
+            progress_bar.progress(progress)
+            progress_text.write(f"Processing: {int(progress)}% complete")
 
         with ProcessPoolExecutor() as executor:
             futures = []
             for scenario_name, years in self.scenarios.items():
                 if not years:  # If years selection is empty, use predefined years
                     years = predefined_years[scenario_name]
-                futures.append(executor.submit(process_scenario, scenario_name, years))
+                futures.append(executor.submit(process_scenario, scenario_name, years, self.df, self.df.columns[1]))
 
             for future in futures:
-                all_results.append(future.result())
+                result = future.result()
+                all_results.append(result)
+                update_progress()
 
         self.show_combined_results_window(all_results)
 
@@ -240,41 +277,6 @@ class RegressionApp:
 
         # Clean up: delete the temporary Excel file
         os.remove(excel_filename)
-
-    def run_regression(self, df):
-        Y = df[self.df.columns[1]].astype(float)
-        X = df[df.columns.difference(['Year', self.df.columns[1]])].astype(float)
-        X = sm.add_constant(X)
-        model = sm.OLS(Y, X).fit()
-        return model
-
-    def format_regression_output(self, model):
-        summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
-        return summary_df
-
-    def calculate_anova_table(self, model):
-        sse = model.ssr  # Sum of squared residuals
-        ssr = model.ess  # Explained sum of squares
-        sst = ssr + sse  # Total sum of squares
-        dfe = model.df_resid  # Degrees of freedom for error
-        dfr = model.df_model  # Degrees of freedom for regression
-        dft = dfr + dfe  # Total degrees of freedom
-
-        mse = sse / dfe  # Mean squared error
-        msr = ssr / dfr  # Mean squared regression
-
-        f_stat = msr / mse  # F-statistic
-        p_value = model.f_pvalue  # P-value for the F-statistic
-
-        anova_table = pd.DataFrame({
-            'df': [dfr, dfe, dft],
-            'SS': [ssr, sse, sst],
-            'MS': [msr, mse, np.nan],
-            'F': [f_stat, np.nan, np.nan],
-            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
-        }, index=['Regression', 'Residual', 'Total'])
-
-        return anova_table
 
 def main():
     st.set_page_config(layout="wide")
