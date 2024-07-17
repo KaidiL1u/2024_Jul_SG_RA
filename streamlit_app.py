@@ -5,6 +5,7 @@ import numpy as np
 import itertools
 import warnings
 import os
+import time
 
 # Suppressing FutureWarnings regarding pandas deprecations
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -68,6 +69,10 @@ class RegressionApp:
             st.error("The 'Year' column is missing from the uploaded file.")
             return
 
+        total_combinations = self.num_combinations * len(self.scenarios)
+        completed_combinations = 0
+        start_time = time.time()
+
         all_results = []
 
         for scenario_name, years in self.scenarios.items():
@@ -92,6 +97,15 @@ class RegressionApp:
                     output_df = self.format_regression_output(model)
                     anova_table = self.calculate_anova_table(model)
                     scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
+
+                # Update progress
+                completed_combinations += 1
+                elapsed_time = time.time() - start_time
+                avg_time_per_combination = elapsed_time / completed_combinations
+                remaining_combinations = total_combinations - completed_combinations
+                remaining_time = avg_time_per_combination * remaining_combinations
+
+                st.write(f"Completed: {completed_combinations}/{total_combinations}, Estimated time left: {remaining_time:.2f} seconds")
 
             all_results.append((scenario_name, scenario_results))
 
