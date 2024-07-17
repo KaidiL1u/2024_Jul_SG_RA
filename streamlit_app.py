@@ -126,9 +126,11 @@ class RegressionApp:
         self.show_combined_results_window(all_results)
 
     def update_progress(self, progress_bar, progress_text):
+        if self.total_regressions == 0:
+            return
         progress_percent = self.completed_regressions / self.total_regressions
         elapsed_time = time.time() - self.start_time
-        estimated_total_time = (elapsed_time / self.completed_regressions) * self.total_regressions
+        estimated_total_time = (elapsed_time / self.completed_regressions) * self.total_regressions if self.completed_regressions > 0 else 0
         time_left = estimated_total_time - elapsed_time
 
         progress_bar.progress(progress_percent)
