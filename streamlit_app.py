@@ -26,7 +26,6 @@ class RegressionApp:
         self.variables = []
         self.scenarios = dict(predefined_years)
         self.num_combinations = 0
-        self.completed_combinations = 0
 
     def choose_file(self):
         file = st.file_uploader("Upload Excel file", type=["xlsx"])
@@ -35,8 +34,6 @@ class RegressionApp:
             self.variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
             st.write("### Columns in the uploaded file:")
             st.write(self.df.columns.tolist())
-            return True
-        return False
 
     def show_variable_selection(self):
         if self.df is None:
@@ -74,15 +71,6 @@ class RegressionApp:
             return
 
         all_results = []
-        placeholder = st.empty()
-
-        total_combinations = sum(
-            len(list(itertools.combinations(self.df.columns[2:], r)))
-            for r in range(1, len(self.df.columns[2:]) + 1)
-        )
-        total_regressions = total_combinations * len(self.scenarios)
-        self.completed_combinations = 0
-        start_time = time.time()
 
         for scenario_name, years in self.scenarios.items():
             if not years:  # If years selection is empty, use predefined years
@@ -106,13 +94,6 @@ class RegressionApp:
                     output_df = self.format_regression_output(model)
                     anova_table = self.calculate_anova_table(model)
                     scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
-
-                self.completed_combinations += 1
-                elapsed_time = time.time() - start_time
-                estimated_total_time = (elapsed_time / self.completed_combinations) * total_regressions
-                time_left = estimated_total_time - elapsed_time
-
-                placeholder.text(f"Completed {self.completed_combinations} out of {total_regressions} regressions. Estimated time left: {time_left:.2f} seconds")
 
             all_results.append((scenario_name, scenario_results))
 
@@ -259,17 +240,27 @@ def main():
     st.title("SG2024 Regression Analysis Crazy-Fast Tool")
 
     st.write("### Upload Xlsx Source File:")
-    if app.choose_file():
-        app.show_variable_selection()
+    app.choose_file()
 
     if st.button("Run Regression Scenarios"):
+        start_time = time.time()
         app.run_regression_scenarios()
+        end_time = time.time()
+        st.session_state["start_time"] = start_time
+        st.session_state["end_time"] = end_time
 
     st.write("### Existing Scenarios:")
     app.display_scenarios()
 
+    st.write("### Variables:")
+    app.show_variable_selection()
+
     if "results" in st.session_state:
         app.display_results_page()
+
+    if "start_time" in st.session_state and "end_time" in st.session_state:
+        total_time = st.session_state["end_time"] - st.session_state["start_time"]
+        st.write(f"Total time taken: {total_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()
