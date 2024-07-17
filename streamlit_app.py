@@ -115,7 +115,10 @@ class RegressionApp:
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(process_scenario, scenario_name, years) for scenario_name, years in self.scenarios.items()]
             for future in futures:
-                all_results.append(future.result())
+                try:
+                    all_results.append(future.result())
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
 
         self.show_combined_results_window(all_results)
 
@@ -255,6 +258,34 @@ class RegressionApp:
         # Clean up: delete the temporary Excel file
         os.remove(excel_filename)
 
+    def format_regression_output(self, model):
+        summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
+        return summary_df
+
+    def calculate_anova_table(self, model):
+        sse = model.ssr  # Sum of squared residuals
+        ssr = model.ess  # Explained sum of squares
+        sst = ssr + sse  # Total sum of squares
+        dfe = model.df_resid  # Degrees of freedom for error
+        dfr = model.df_model  # Degrees of freedom for regression
+        dft = dfr + dfe  # Total degrees of freedom
+
+        mse = sse / dfe  # Mean squared error
+        msr = ssr / dfr  # Mean squared regression
+
+        f_stat = msr / mse  # F-statistic
+        p_value = model.f_pvalue  # P-value for the F-statistic
+
+        anova_table = pd.DataFrame({
+            'df': [dfr, dfe, dft],
+            'SS': [ssr, sse, sst],
+            'MS': [msr, mse, np.nan],
+            'F': [f_stat, np.nan, np.nan],
+            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
+        }, index=['Regression', 'Residual', 'Total'])
+
+        return anova_table
+
 def main():
     st.set_page_config(layout="wide")
 
@@ -283,8 +314,7 @@ def main():
 
         all_results = st.session_state["results"]
         for scenario_name, scenario_results in all_results:
-            if st.button(f"Download {scenario_name} Excel File"):
-                app.export_to_excel(scenario_name, scenario_results)
+            st.button(f"Download {scenario_name} Excel File", on_click=app.export_to_excel, args=(scenario_name, scenario_results))
 
 if __name__ == "__main__":
     main()
