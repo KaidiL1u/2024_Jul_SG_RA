@@ -22,61 +22,77 @@ predefined_years = {
 }
 
 def run_regression(df, y_col, selected_x_vars):
-    Y = df[y_col].astype(float)
-    X = df[selected_x_vars].astype(float)
-    X = sm.add_constant(X)
-    model = sm.OLS(Y, X).fit()
-    return model
+    try:
+        Y = df[y_col].astype(float)
+        X = df[selected_x_vars].astype(float)
+        X = sm.add_constant(X)
+        model = sm.OLS(Y, X).fit()
+        return model
+    except KeyError as e:
+        print(f"KeyError in run_regression: {e}")
+        raise
 
 def format_regression_output(model):
-    summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
-    return summary_df
+    try:
+        summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
+        return summary_df
+    except Exception as e:
+        print(f"Error in format_regression_output: {e}")
+        raise
 
 def calculate_anova_table(model):
-    sse = model.ssr  # Sum of squared residuals
-    ssr = model.ess  # Explained sum of squares
-    sst = ssr + sse  # Total sum of squares
-    dfe = model.df_resid  # Degrees of freedom for error
-    dfr = model.df_model  # Degrees of freedom for regression
-    dft = dfr + dfe  # Total degrees of freedom
+    try:
+        sse = model.ssr  # Sum of squared residuals
+        ssr = model.ess  # Explained sum of squares
+        sst = ssr + sse  # Total sum of squares
+        dfe = model.df_resid  # Degrees of freedom for error
+        dfr = model.df_model  # Degrees of freedom for regression
+        dft = dfr + dfe  # Total degrees of freedom
 
-    mse = sse / dfe  # Mean squared error
-    msr = ssr / dfr  # Mean squared regression
+        mse = sse / dfe  # Mean squared error
+        msr = ssr / dfr  # Mean squared regression
 
-    f_stat = msr / mse  # F-statistic
-    p_value = model.f_pvalue  # P-value for the F-statistic
+        f_stat = msr / mse  # F-statistic
+        p_value = model.f_pvalue  # P-value for the F-statistic
 
-    anova_table = pd.DataFrame({
-        'df': [dfr, dfe, dft],
-        'SS': [ssr, sse, sst],
-        'MS': [msr, mse, np.nan],
-        'F': [f_stat, np.nan, np.nan],
-        'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
-    }, index=['Regression', 'Residual', 'Total'])
+        anova_table = pd.DataFrame({
+            'df': [dfr, dfe, dft],
+            'SS': [ssr, sse, sst],
+            'MS': [msr, mse, np.nan],
+            'F': [f_stat, np.nan, np.nan],
+            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
+        }, index=['Regression', 'Residual', 'Total'])
 
-    return anova_table
+        return anova_table
+    except Exception as e:
+        print(f"Error in calculate_anova_table: {e}")
+        raise
 
 def process_scenario(scenario_name, years, df, y_col):
-    df_selected = df[df['Year'].isin(years)]
-    variables = df.columns[2:].tolist()  # Assuming variables start from column C onwards
-    num_variables = len(variables)
+    try:
+        df_selected = df[df['Year'].isin(years)]
+        variables = df.columns[2:].tolist()  # Assuming variables start from column C onwards
+        num_variables = len(variables)
 
-    combinations = itertools.chain.from_iterable(
-        itertools.combinations(variables, r) for r in range(1, num_variables + 1)
-    )
+        combinations = itertools.chain.from_iterable(
+            itertools.combinations(variables, r) for r in range(1, num_variables + 1)
+        )
 
-    scenario_results = []
+        scenario_results = []
 
-    for idx, selected_x_vars in enumerate(combinations, start=1):
-        columns_to_keep = ['Year', y_col] + list(selected_x_vars)
-        df_selected_sub = df_selected[columns_to_keep]
-        model = run_regression(df_selected_sub, y_col, selected_x_vars)
-        if model:
-            output_df = format_regression_output(model)
-            anova_table = calculate_anova_table(model)
-            scenario_results.append((output_df, years, y_col, model, anova_table, selected_x_vars, idx))
+        for idx, selected_x_vars in enumerate(combinations, start=1):
+            columns_to_keep = ['Year', y_col] + list(selected_x_vars)
+            df_selected_sub = df_selected[columns_to_keep]
+            model = run_regression(df_selected_sub, y_col, selected_x_vars)
+            if model:
+                output_df = format_regression_output(model)
+                anova_table = calculate_anova_table(model)
+                scenario_results.append((output_df, years, y_col, model, anova_table, selected_x_vars, idx))
 
-    return scenario_name, scenario_results
+        return scenario_name, scenario_results
+    except Exception as e:
+        print(f"Error in process_scenario for {scenario_name}: {e}")
+        raise
 
 class RegressionApp:
     def __init__(self):
@@ -156,9 +172,12 @@ class RegressionApp:
                 futures.append(executor.submit(process_scenario, scenario_name, years, self.df, self.df.columns[1]))
 
             for future in futures:
-                result = future.result()
-                all_results.append(result)
-                update_progress()
+                try:
+                    result = future.result()
+                    all_results.append(result)
+                    update_progress()
+                except Exception as e:
+                    st.error(f"Error processing future result: {e}")
 
         self.show_combined_results_window(all_results)
 
