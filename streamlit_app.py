@@ -56,7 +56,11 @@ class RegressionApp:
         for name, years in self.scenarios.items():
             scenario_df.loc[name] = ['•' if year in years else '' for year in all_years]
 
-        st.dataframe(scenario_df.T.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
+        try:
+            styled_scenario_df = scenario_df.T.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])])
+            st.dataframe(styled_scenario_df)
+        except Exception as e:
+            st.error(f"Error displaying styled DataFrame: {e}")
 
     def run_regression_scenarios(self):
         if self.df is None:
@@ -165,12 +169,17 @@ class RegressionApp:
                         summary_data.append([''] * 10)
 
                     # Add x no.of blank rows between each output
-                    for _ in range(2): # replace the number in here as x
+                    for _ in range(2):  # replace the number in here as x
                         summary_data.append([''] * 10)
 
                 summary_df = pd.DataFrame(summary_data)
 
-                st.dataframe(summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
+                try:
+                    styled_summary_df = summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])])
+                    st.dataframe(styled_summary_df)
+                except Exception as e:
+                    st.error(f"Error displaying styled DataFrame: {e}")
+                    st.dataframe(summary_df)  # Display unstyled DataFrame for debugging
 
                 if st.button(f"Copy to Clipboard {scenario_name}"):
                     csv = summary_df.to_csv(sep='\t', index=False, header=False)
