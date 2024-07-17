@@ -264,7 +264,7 @@ def main():
 
     app = RegressionApp()
 
-    st.title("SG2024 Regression Analysis Crazy-Fast Tool")
+    st.title("SG2024 Regression Analysis Crazy-Fast Tool CAREFUL OF MENTAL MELTDOWN IF DATA TOO BIG")
 
     st.write("### Upload Xlsx Source File:")
     app.choose_file()
