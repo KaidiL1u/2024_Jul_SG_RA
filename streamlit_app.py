@@ -196,105 +196,64 @@ class RegressionApp:
 
                 st.dataframe(summary_df)
 
-        if st.button("Download All Results to Excel"):
-            self.export_all_to_excel(all_results)
+    def export_to_excel(self, scenario_name, scenario_results):
+        summary_data = []
 
-    def export_all_to_excel(self, all_results):
-        for scenario_name, scenario_results in all_results:
-            summary_data = []
+        for result in scenario_results:
+            output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
 
-            for result in scenario_results:
-                output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
+            # Add selected years at the top
+            summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
+            summary_data.append(['', 'SUMMARY OUTPUT', ''])
 
-                # Add selected years at the top
-                summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
-                summary_data.append(['', 'SUMMARY OUTPUT', ''])
+            summary_data.append(['', 'Regression Statistics', ''])
+            summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
+            summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
+            summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
+            summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
+            summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
 
-                summary_data.append(['', 'Regression Statistics', ''])
-                summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
-                summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
-                summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
+            # Add ANOVA table
+            summary_data.append(['', 'ANOVA', ''])
+            summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
+            for index, row in anova_table.iterrows():
+                summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
 
+            # Add coefficients if available
+            coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
+            summary_data.append(['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
 
-                # Add ANOVA table
-                summary_data.append(['', 'ANOVA', ''])
-                summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
-                for index, row in anova_table.iterrows():
-                    summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
+            # Separate 'Constant' and other variables
+            constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
+            x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
 
+            # Sort remaining x variables alphabetically
+            x_vars_sorted = sorted(x_vars)
 
-                # Add coefficients if available
-                coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
-                summary_data.append(['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
+            # Add 'Constant' first
+            summary_data.append([f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
 
-                # Separate 'Constant' and other variables
-                constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
-                x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
+            # Add sorted x variables
+            for i, var in enumerate(x_vars_sorted, start=1):
+                row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
+                summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
 
-                # Sort remaining x variables alphabetically
-                x_vars_sorted = sorted(x_vars)
+        summary_df = pd.DataFrame(summary_data)
 
-                # Add 'Constant' first
-                summary_data.append([f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
+        # Create a Pandas Excel writer using XlsxWriter as the engine.
+        excel_filename = f"{scenario_name}.xlsx"
+        sheet_name = "Regression Output"
 
-                # Add sorted x variables
-                for i, var in enumerate(x_vars_sorted, start=1):
-                    row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                    summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
+        with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
+            summary_df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-            summary_df = pd.DataFrame(summary_data)
+        # Download the Excel file
+        with open(excel_filename, 'rb') as f:
+            data = f.read()
+        st.download_button(label=f"Download {scenario_name} Excel File", data=data, file_name=excel_filename)
 
-            # Create a Pandas Excel writer using XlsxWriter as the engine.
-            excel_filename = f"{scenario_name}.xlsx"
-            sheet_name = "Regression Output"
-
-            with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
-                summary_df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-            # Download the Excel file
-            with open(excel_filename, 'rb') as f:
-                data = f.read()
-            st.download_button(label=f"Download {scenario_name} Excel File", data=data, file_name=excel_filename)
-
-            # Clean up: delete the temporary Excel file
-            os.remove(excel_filename)
-
-    def run_regression(self, df):
-        Y = df[self.df.columns[1]].astype(float)
-        X = df[df.columns.difference(['Year', self.df.columns[1]])].astype(float)
-        X = sm.add_constant(X)
-        model = sm.OLS(Y, X).fit()
-        return model
-
-    def format_regression_output(self, model):
-        summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
-        return summary_df
-
-    def calculate_anova_table(self, model):
-        sse = model.ssr  # Sum of squared residuals
-        ssr = model.ess  # Explained sum of squares
-        sst = ssr + sse  # Total sum of squares
-        dfe = model.df_resid  # Degrees of freedom for error
-        dfr = model.df_model  # Degrees of freedom for regression
-        dft = dfr + dfe  # Total degrees of freedom
-
-        mse = sse / dfe  # Mean squared error
-        msr = ssr / dfr  # Mean squared regression
-
-        f_stat = msr / mse  # F-statistic
-        p_value = model.f_pvalue  # P-value for the F-statistic
-
-        anova_table = pd.DataFrame({
-            'df': [dfr, dfe, dft],
-            'SS': [ssr, sse, sst],
-            'MS': [msr, mse, np.nan],
-            'F': [f_stat, np.nan, np.nan],
-            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
-        }, index=['Regression', 'Residual', 'Total'])
-
-        return anova_table
+        # Clean up: delete the temporary Excel file
+        os.remove(excel_filename)
 
 def main():
     st.set_page_config(layout="wide")
@@ -321,6 +280,11 @@ def main():
 
     if "results" in st.session_state:
         app.display_results_page()
+
+        all_results = st.session_state["results"]
+        for scenario_name, scenario_results in all_results:
+            if st.button(f"Download {scenario_name} Excel File"):
+                app.export_to_excel(scenario_name, scenario_results)
 
 if __name__ == "__main__":
     main()
