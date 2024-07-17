@@ -157,25 +157,33 @@ class RegressionApp:
         st.write(f"Estimated processing time: {estimated_time:.2f} seconds")
         progress_bar = st.progress(0)
         progress_text = st.empty()
+        lines_processed_text = st.empty()
 
-        def update_progress():
+        def update_progress(lines_processed, total_lines):
             elapsed_time = time.time() - start_time
-            progress = min((elapsed_time / estimated_time) * 100, 100)
+            progress = min((lines_processed / total_lines) * 100, 100)
+            time_left = max(estimated_time - elapsed_time, 0)
             progress_bar.progress(progress)
             progress_text.write(f"Processing: {int(progress)}% complete")
+            lines_processed_text.write(f"Lines processed: {lines_processed} out of {total_lines} ({time_left:.2f} seconds left)")
 
         with ProcessPoolExecutor() as executor:
             futures = []
+            total_lines = 0
+
             for scenario_name, years in self.scenarios.items():
                 if not years:  # If years selection is empty, use predefined years
                     years = predefined_years[scenario_name]
+                total_lines += len(list(itertools.chain.from_iterable(itertools.combinations(self.df.columns[2:], r) for r in range(1, len(self.df.columns[2:]) + 1))))
                 futures.append(executor.submit(process_scenario, scenario_name, years, self.df, self.df.columns[1]))
 
+            lines_processed = 0
             for future in futures:
                 try:
                     result = future.result()
                     all_results.append(result)
-                    update_progress()
+                    lines_processed += len(result[1])
+                    update_progress(lines_processed, total_lines)
                 except Exception as e:
                     st.error(f"Error processing future result: {e}")
 
@@ -198,86 +206,48 @@ class RegressionApp:
 
         for tab, (scenario_name, scenario_results) in zip(tabs, all_results):
             with tab:
-                summary_data = []
+                st.subheader(f"Scenario: {scenario_name}")
 
-                for result in scenario_results:
-                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
+                # Display top 20 lines preview thumbnail
+                if scenario_results:
+                    preview_data = []
+                    for result in scenario_results[:20]:  # Preview only top 20 results
+                        output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
 
-                    # Add selected years at the top
-                    summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
-                    summary_data.append(['', 'SUMMARY OUTPUT', ''])
-                    summary_data.append([''])
-                    summary_data.append(['', 'Regression Statistics', ''])
-                    summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                    summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
-                    summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                    summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
-                    summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
-                    summary_data.append([''])
+                        preview_data.append({
+                            "Selected Years": ', '.join(map(str, selected_years)),
+                            "R Square": f"{model.rsquared:.4f}",
+                            "Adjusted R Square": f"{model.rsquared_adj:.4f}",
+                            "Observations": f"{int(model.nobs)}",
+                            "Selected X Variables": ', '.join(selected_x_vars)
+                        })
 
-                    # Add ANOVA table
-                    summary_data.append(['', 'ANOVA', ''])
-                    summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
-                    for index, row in anova_table.iterrows():
-                        summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
-                    summary_data.append([''])
+                    preview_df = pd.DataFrame(preview_data)
+                    st.write(preview_df)
 
-                    # Add coefficients if available
-                    coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
-                    summary_data.append(['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
+                # Save the full results in the session state for download
+                st.session_state[f"{scenario_name}_results"] = scenario_results
 
-                    # Separate 'Constant' and other variables
-                    constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
-                    x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
+                if st.button(f"Download Full Results for {scenario_name}"):
+                    self.export_full_results(scenario_results, scenario_name)
 
-                    # Sort remaining x variables alphabetically
-                    x_vars_sorted = sorted(x_vars)
+    def export_full_results(self, results, scenario_name):
+        full_data = []
 
-                    # Add 'Constant' first
-                    summary_data.append([f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
+        for result in results:
+            output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
+            full_data.append({
+                "Selected Years": ', '.join(map(str, selected_years)),
+                "R Square": f"{model.rsquared:.4f}",
+                "Adjusted R Square": f"{model.rsquared_adj:.4f}",
+                "Observations": f"{int(model.nobs)}",
+                "Selected X Variables": ', '.join(selected_x_vars),
+                "Model Summary": output_df.to_csv(index=False),
+                "ANOVA Table": anova_table.to_csv(index=False)
+            })
 
-                    # Add sorted x variables
-                    for i, var in enumerate(x_vars_sorted, start=1):
-                        row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                        summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
-
-                    # Determine the number of blank rows to add
-                    num_x_vars = len(selected_x_vars)
-                    blank_rows_to_add = 20 - (10 + num_x_vars)
-                    for _ in range(blank_rows_to_add):
-                        summary_data.append([''] * 10)
-
-                    # Add x no.of blank rows between each output
-                    for _ in range(2):  # replace the number in here as x
-                        summary_data.append([''] * 10)
-
-                summary_df = pd.DataFrame(summary_data)
-
-                # Pagination
-                page_size = 20  # Number of rows per page
-                total_pages = (len(summary_df) // page_size) + 1
-                page_number = st.number_input('Page Number', min_value=1, max_value=total_pages, value=1)
-
-                start_row = (page_number - 1) * page_size
-                end_row = start_row + page_size
-                current_page_df = summary_df.iloc[start_row:end_row]
-
-                try:
-                    styled_summary_df = current_page_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])])
-                    st.dataframe(styled_summary_df)
-                except Exception as e:
-                    st.error(f"Error displaying styled DataFrame: {e}")
-                    st.dataframe(current_page_df)  # Display unstyled DataFrame for debugging
-
-                if st.button(f"Copy to Clipboard {scenario_name}"):
-                    csv = summary_df.to_csv(sep='\t', index=False, header=False)
-                    st.session_state[f"{scenario_name}_csv"] = csv
-                    st.success("Data prepared for clipboard copying. Click the button below to copy.")
-                    if st.button("Copy Now"):
-                        st.write(f"Copy the data manually from here:\n\n{csv}\n")
-
-                if st.button(f"Export {scenario_name} as Excel"):
-                    self.export_excel(summary_df, scenario_name)
+        full_df = pd.DataFrame(full_data)
+        self.export_excel(full_df, scenario_name)
 
     def export_excel(self, df, scenario_name):
         # Create a Pandas Excel writer using XlsxWriter as the engine.
