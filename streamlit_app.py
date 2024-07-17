@@ -308,13 +308,14 @@ def main():
     if "results" in st.session_state:
         app.display_results_page()
 
-    # Ensure the download button logic is correctly placed and checks the session state for files
+    # Check if there are files to download and if the user clicks the download button
     if hasattr(app, 'download_files') and app.download_files:
-        for excel_filename in app.download_files:
-            with open(excel_filename, 'rb') as f:
-                data = f.read()
-            st.download_button(label=f"Download {excel_filename}", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            os.remove(excel_filename)
+        if st.button("Download All Scenario Excel Files"):
+            for excel_filename in app.download_files:
+                with open(excel_filename, 'rb') as f:
+                    data = f.read()
+                st.download_button(label=f"Download {excel_filename}", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                os.remove(excel_filename)
 
 if __name__ == "__main__":
     main()
