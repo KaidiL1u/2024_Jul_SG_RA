@@ -58,7 +58,7 @@ class RegressionApp:
         for name, years in self.scenarios.items():
             scenario_df.loc[name] = ['•' if year in years else '' for year in all_years]
 
-        st.dataframe(scenario_df.T.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
+        st.table(scenario_df.T.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
 
     def run_regression_scenarios(self):
         if self.df is None:
@@ -131,21 +131,21 @@ class RegressionApp:
                     # Add selected years at the top
                     summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
                     summary_data.append(['', 'SUMMARY OUTPUT', ''])
-                    summary_data.append([''])
+                    
                     summary_data.append(['', 'Regression Statistics', ''])
                     summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
                     summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
                     summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
                     summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
-                    summary_data.append([''])
+                    
 
                     # Add ANOVA table
                     summary_data.append(['', 'ANOVA', ''])
                     summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
                     for index, row in anova_table.iterrows():
                         summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
-                    summary_data.append([''])
+                    
 
                     # Add coefficients if available
                     coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
@@ -166,19 +166,9 @@ class RegressionApp:
                         row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
                         summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
 
-                    # Determine the number of blank rows to add
-                    num_x_vars = len(selected_x_vars)
-                    blank_rows_to_add = 20 - (10 + num_x_vars)
-                    for _ in range(blank_rows_to_add):
-                        summary_data.append([''] * 10)
-
-                    # Add x no.of blank rows between each output
-                    for _ in range(2): # replace the number in here as x
-                        summary_data.append([''] * 10)
-
                 summary_df = pd.DataFrame(summary_data)
 
-                st.dataframe(summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
+                st.table(summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]))
 
                 if st.button(f"Copy to Clipboard {scenario_name}"):
                     csv = summary_df.to_csv(sep='\t', index=False, header=False)
