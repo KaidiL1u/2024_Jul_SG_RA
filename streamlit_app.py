@@ -300,24 +300,20 @@ def main():
         with st.spinner("Running regression scenarios..."):
             app.run_regression_scenarios()
 
-    if "progress_text" in st.session_state:
-        st.write(st.session_state.progress_text)
-
-    st.write("### Existing Scenarios:")
     app.display_scenarios()
 
-    st.write("### Variables:")
     app.show_variable_selection()
 
     if "results" in st.session_state:
         app.display_results_page()
 
-        if st.button("Download All Scenario Excel Files"):
-            for excel_filename in app.download_files:
-                with open(excel_filename, 'rb') as f:
-                    data = f.read()
-                st.download_button(label=f"Download {excel_filename}", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                os.remove(excel_filename)
+    # Initialize download after checking if files are ready
+    if "download_files" in st.session_state and st.session_state.download_files:
+        for excel_filename in st.session_state.download_files:
+            with open(excel_filename, 'rb') as f:
+                data = f.read()
+            st.download_button(label=f"Download {excel_filename}", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            os.remove(excel_filename)
 
 if __name__ == "__main__":
     main()
