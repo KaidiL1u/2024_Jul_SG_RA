@@ -31,6 +31,9 @@ def run_regression(df, y_col, selected_x_vars):
     except KeyError as e:
         st.error(f"KeyError in run_regression: {e}")
         raise
+    except Exception as e:
+        st.error(f"Unexpected error in run_regression: {e}")
+        raise
 
 def format_regression_output(model):
     try:
@@ -186,6 +189,7 @@ class RegressionApp:
                     update_progress(lines_processed, total_lines)
                 except Exception as e:
                     st.error(f"Error processing future result: {e}")
+                    st.error(e)  # Persistently show the error
 
         st.success("Regression analysis completed!")
         self.show_combined_results_window(all_results)
