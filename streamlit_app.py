@@ -26,9 +26,6 @@ class RegressionApp:
         self.variables = []
         self.scenarios = dict(predefined_years)
         self.num_combinations = 0
-        self.total_combinations = 0
-        self.processed_combinations = 0
-        self.start_time = None
 
     def choose_file(self):
         file = st.file_uploader("Upload Excel file", type=["xlsx"])
@@ -45,10 +42,10 @@ class RegressionApp:
 
         self.variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
         self.num_combinations = sum([len(list(itertools.combinations(self.variables, i))) for i in range(1, len(self.variables) + 1)])
-        self.total_combinations = self.num_combinations * len(self.scenarios)
+        total_regressions = 5 * self.num_combinations
 
         st.subheader(f"{len(self.variables)} variables found.")
-        st.subheader(f"Regression will create {self.num_combinations} variable combinations per scenario.")
+        st.subheader(f"Regression will create {self.num_combinations} variable combinations (Total Regressions: {total_regressions}).")
 
         st.write("### Variables:")
         for var in self.variables:
@@ -74,7 +71,6 @@ class RegressionApp:
             return
 
         all_results = []
-        self.start_time = time.time()
 
         for scenario_name, years in self.scenarios.items():
             if not years:  # If years selection is empty, use predefined years
@@ -98,21 +94,10 @@ class RegressionApp:
                     output_df = self.format_regression_output(model)
                     anova_table = self.calculate_anova_table(model)
                     scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
-                self.processed_combinations += 1
-                self.update_progress()
 
             all_results.append((scenario_name, scenario_results))
 
         self.show_combined_results_window(all_results)
-
-    def update_progress(self):
-        elapsed_time = time.time() - self.start_time
-        estimated_total_time = (elapsed_time / self.processed_combinations) * self.total_combinations
-        remaining_time = estimated_total_time - elapsed_time
-        progress_percentage = (self.processed_combinations / self.total_combinations) * 100
-
-        st.write(f"Progress: {progress_percentage:.2f}%")
-        st.write(f"Estimated time remaining: {remaining_time / 60:.2f} minutes")
 
     def show_combined_results_window(self, all_results):
         st.session_state["results"] = all_results
@@ -124,6 +109,12 @@ class RegressionApp:
             return
 
         all_results = st.session_state["results"]
+        total_regressions = sum(len(scenario[1]) for scenario in all_results)
+        completed_regressions = sum(len(scenario[1]) for scenario in all_results)
+
+        # Display progress
+        progress_text = f"Completed {completed_regressions} out of {total_regressions} regressions"
+        st.write(progress_text)
 
         # Prepare to display up to 5 scenarios
         num_tabs = min(5, len(all_results))
@@ -262,7 +253,11 @@ def main():
     app.choose_file()
 
     if st.button("Run Regression Scenarios"):
+        start_time = time.time()
         app.run_regression_scenarios()
+        end_time = time.time()
+        st.session_state["start_time"] = start_time
+        st.session_state["end_time"] = end_time
 
     st.write("### Existing Scenarios:")
     app.display_scenarios()
@@ -272,6 +267,10 @@ def main():
 
     if "results" in st.session_state:
         app.display_results_page()
+
+    if "start_time" in st.session_state and "end_time" in st.session_state:
+        total_time = st.session_state["end_time"] - st.session_state["start_time"]
+        st.write(f"Total time taken: {total_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()
