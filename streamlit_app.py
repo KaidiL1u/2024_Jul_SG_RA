@@ -87,6 +87,9 @@ class RegressionApp:
 
         self.start_time = time.time()
 
+        progress_bar = st.progress(0)
+        progress_text = st.empty()
+
         for scenario_name, years in self.scenarios.items():
             if not years:  # If years selection is empty, use predefined years
                 years = predefined_years[scenario_name]
@@ -113,7 +116,7 @@ class RegressionApp:
                     anova_table = self.calculate_anova_table(model)
                     scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
                     self.completed_regressions += 1
-                    self.update_progress()
+                    self.update_progress(progress_bar, progress_text)
 
             all_results.append((scenario_name, scenario_results))
 
@@ -122,13 +125,15 @@ class RegressionApp:
 
         self.show_combined_results_window(all_results)
 
-    def update_progress(self):
+    def update_progress(self, progress_bar, progress_text):
+        progress_percent = self.completed_regressions / self.total_regressions
         elapsed_time = time.time() - self.start_time
         estimated_total_time = (elapsed_time / self.completed_regressions) * self.total_regressions
         time_left = estimated_total_time - elapsed_time
-        progress_text = f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. " \
-                        f"Time left: {time_left:.2f} seconds. Records left to run: {self.total_regressions - self.completed_regressions}."
-        st.session_state.progress_text = progress_text
+
+        progress_bar.progress(progress_percent)
+        progress_text.text(f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. "
+                           f"Time left: {time_left:.2f} seconds. Records left to run: {self.total_regressions - self.completed_regressions}.")
 
     def show_combined_results_window(self, all_results):
         st.session_state["results"] = all_results
@@ -266,7 +271,8 @@ def main():
     app.choose_file()
 
     if st.button("Run Regression Scenarios"):
-        app.run_regression_scenarios()
+        with st.spinner("Running regression scenarios..."):
+            app.run_regression_scenarios()
 
     if "progress_text" in st.session_state:
         st.write(st.session_state.progress_text)
