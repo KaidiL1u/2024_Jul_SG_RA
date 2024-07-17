@@ -5,6 +5,8 @@ import numpy as np
 import itertools
 import warnings
 import os
+import time
+from concurrent.futures import ProcessPoolExecutor
 
 # Suppressing FutureWarnings regarding pandas deprecations
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -74,10 +76,16 @@ class RegressionApp:
 
         all_results = []
 
-        for scenario_name, years in self.scenarios.items():
-            if not years:  # If years selection is empty, use predefined years
-                years = predefined_years[scenario_name]
+        # Estimate time and set up countdown
+        total_combinations = sum([len(list(itertools.combinations(self.df.columns[2:], i))) for i in range(1, len(self.df.columns[2:]) + 1)])
+        estimated_time = total_combinations * 0.05  # Assume each combination takes 0.05 seconds
+        start_time = time.time()
 
+        st.write(f"Estimated processing time: {estimated_time:.2f} seconds")
+        progress_bar = st.progress(0)
+        progress_text = st.empty()
+
+        def process_scenario(scenario_name, years):
             df_selected = self.df[self.df['Year'].isin(years)]
             variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
             num_variables = len(variables)
@@ -97,7 +105,23 @@ class RegressionApp:
                     anova_table = self.calculate_anova_table(model)
                     scenario_results.append((output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
 
-            all_results.append((scenario_name, scenario_results))
+                # Update progress
+                elapsed_time = time.time() - start_time
+                progress = min((elapsed_time / estimated_time) * 100, 100)
+                progress_bar.progress(progress)
+                progress_text.write(f"Processing: {int(progress)}% complete")
+
+            return scenario_name, scenario_results
+
+        with ProcessPoolExecutor() as executor:
+            futures = []
+            for scenario_name, years in self.scenarios.items():
+                if not years:  # If years selection is empty, use predefined years
+                    years = predefined_years[scenario_name]
+                futures.append(executor.submit(process_scenario, scenario_name, years))
+
+            for future in futures:
+                all_results.append(future.result())
 
         self.show_combined_results_window(all_results)
 
@@ -174,12 +198,21 @@ class RegressionApp:
 
                 summary_df = pd.DataFrame(summary_data)
 
+                # Pagination
+                page_size = 20  # Number of rows per page
+                total_pages = (len(summary_df) // page_size) + 1
+                page_number = st.number_input('Page Number', min_value=1, max_value=total_pages, value=1)
+
+                start_row = (page_number - 1) * page_size
+                end_row = start_row + page_size
+                current_page_df = summary_df.iloc[start_row:end_row]
+
                 try:
-                    styled_summary_df = summary_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])])
+                    styled_summary_df = current_page_df.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])])
                     st.dataframe(styled_summary_df)
                 except Exception as e:
                     st.error(f"Error displaying styled DataFrame: {e}")
-                    st.dataframe(summary_df)  # Display unstyled DataFrame for debugging
+                    st.dataframe(current_page_df)  # Display unstyled DataFrame for debugging
 
                 if st.button(f"Copy to Clipboard {scenario_name}"):
                     csv = summary_df.to_csv(sep='\t', index=False, header=False)
