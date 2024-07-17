@@ -195,6 +195,12 @@ class RegressionApp:
         # Prepare to display up to 5 scenarios
         num_tabs = min(5, len(all_results))
         tab_titles = [f"Scenario: {name}" for name, _ in all_results[:num_tabs]]
+
+        # Ensure tab_titles is valid
+        if not all(isinstance(title, str) for title in tab_titles) or len(tab_titles) == 0:
+            st.error("Invalid tab titles for display.")
+            return
+
         tabs = st.tabs(tab_titles)
 
         for tab, (scenario_name, scenario_results) in zip(tabs, all_results[:num_tabs]):
