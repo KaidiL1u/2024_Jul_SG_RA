@@ -149,25 +149,27 @@ class RegressionApp:
                     output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
 
                     # Add selected years at the top
-                    summary_data.append(['Selected Years', ', '.join(map(str, selected_years))])
-                    summary_data.append(['SUMMARY OUTPUT'])
-                    
-                    summary_data.append(['Regression Statistics'])
-                    summary_data.append(['Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                    summary_data.append(['R Square', f"{model.rsquared:.4f}"])
-                    summary_data.append(['Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                    summary_data.append(['Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
-                    summary_data.append(['Observations', f"{int(model.nobs)}"])
-                    
+                    summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
+                    summary_data.append(['', 'SUMMARY OUTPUT', ''])
+
+                    summary_data.append(['', 'Regression Statistics', ''])
+                    summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
+                    summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
+                    summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
+                    summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
+                    summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
+ 
+
                     # Add ANOVA table
-                    summary_data.append(['ANOVA'])
-                    summary_data.append(['', 'df', 'SS', 'MS', 'F', 'Significance F'])
+                    summary_data.append(['', 'ANOVA', ''])
+                    summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
                     for index, row in anova_table.iterrows():
-                        summary_data.append([str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
+                        summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
+                    
 
                     # Add coefficients if available
                     coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
-                    summary_data.append(['Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
+                    summary_data.append(['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
 
                     # Separate 'Constant' and other variables
                     constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
@@ -177,12 +179,13 @@ class RegressionApp:
                     x_vars_sorted = sorted(x_vars)
 
                     # Add 'Constant' first
-                    summary_data.append(['Constant'] + [str(item) if item is not None else '' for item in constant_row])
+                    summary_data.append([f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
 
                     # Add sorted x variables
-                    for var in x_vars_sorted:
+                    for i, var in enumerate(x_vars_sorted, start=1):
                         row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                        summary_data.append([var] + [str(item) if item is not None else '' for item in row])
+                        summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
+
 
                 summary_df = pd.DataFrame(summary_data)
 
