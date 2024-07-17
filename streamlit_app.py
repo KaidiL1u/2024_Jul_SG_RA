@@ -250,13 +250,7 @@ class RegressionApp:
         with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
             summary_df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-        # Download the Excel file
-        with open(excel_filename, 'rb') as f:
-            data = f.read()
-        st.download_button(label=f"Download {scenario_name} Excel File", data=data, file_name=excel_filename)
-
-        # Clean up: delete the temporary Excel file
-        os.remove(excel_filename)
+        return excel_filename
 
     def format_regression_output(self, model):
         summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
@@ -314,7 +308,12 @@ def main():
 
         all_results = st.session_state["results"]
         for scenario_name, scenario_results in all_results:
-            st.button(f"Download {scenario_name} Excel File", on_click=app.export_to_excel, args=(scenario_name, scenario_results))
+            if st.button(f"Download {scenario_name} Excel File"):
+                excel_filename = app.export_to_excel(scenario_name, scenario_results)
+                with open(excel_filename, 'rb') as f:
+                    data = f.read()
+                st.download_button(label=f"Download {scenario_name} Excel File", data=data, file_name=excel_filename)
+                os.remove(excel_filename)
 
 if __name__ == "__main__":
     main()
