@@ -96,7 +96,7 @@ class RegressionApp:
             variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
             num_variables = len(variables)
 
-            combinations = list(itertools.chain_from_iterable(
+            combinations = list(itertools.chain.from_iterable(
                 itertools.combinations(variables, r) for r in range(1, num_variables + 1)
             ))
 
@@ -117,7 +117,6 @@ class RegressionApp:
             for future in futures:
                 all_results.append(future.result())
 
-        self.prepare_downloads(all_results)
         self.show_combined_results_window(all_results)
 
     def update_progress(self, progress_bar, progress_text):
@@ -131,55 +130,6 @@ class RegressionApp:
         progress_bar.progress(progress_percent)
         progress_text.text(f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. "
                            f"Time left: {time_left:.2f} seconds. Records left to run: {self.total_regressions - self.completed_regressions}.")
-
-    def prepare_downloads(self, all_results):
-        st.session_state["download_links"] = {}
-        for scenario_name, scenario_results in all_results:
-            summary_data = []
-            for result in scenario_results:
-                output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
-
-                # Add selected years at the top
-                summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
-                summary_data.append(['', 'SUMMARY OUTPUT', ''])
-
-                summary_data.append(['', 'Regression Statistics', ''])
-                summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
-                summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
-                summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
-
-                # Add ANOVA table
-                summary_data.append(['', 'ANOVA', ''])
-                summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
-                for index, row in anova_table.iterrows():
-                    summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
-
-                # Add coefficients if available
-                coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
-                summary_data.append(['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
-
-                # Separate 'Constant' and other variables
-                constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
-                x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
-
-                # Sort remaining x variables alphabetically
-                x_vars_sorted = sorted(x_vars)
-
-                # Add 'Constant' first
-                summary_data.append([f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
-
-                # Add sorted x variables
-                for i, var in enumerate(x_vars_sorted, start=1):
-                    row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                    summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
-
-            summary_df = pd.DataFrame(summary_data)
-            excel_filename = f"{scenario_name}.xlsx"
-            with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
-                summary_df.to_excel(writer, sheet_name="Sheet1", index=False)
-            st.session_state["download_links"][scenario_name] = excel_filename
 
     def show_combined_results_window(self, all_results):
         st.session_state["results"] = all_results
@@ -214,12 +164,14 @@ class RegressionApp:
                     summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
                     summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
                     summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
+ 
 
                     # Add ANOVA table
                     summary_data.append(['', 'ANOVA', ''])
                     summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
                     for index, row in anova_table.iterrows():
                         summary_data.append(['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
+                    
 
                     # Add coefficients if available
                     coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
@@ -240,15 +192,37 @@ class RegressionApp:
                         row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
                         summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
 
+
                 summary_df = pd.DataFrame(summary_data)
+
                 st.dataframe(summary_df)
 
-                # Provide direct download link
-                if scenario_name in st.session_state["download_links"]:
-                    excel_filename = st.session_state["download_links"][scenario_name]
-                    with open(excel_filename, 'rb') as f:
-                        data = f.read()
-                    st.download_button(label=f"Download {scenario_name} as Excel", data=data, file_name=excel_filename)
+                if st.button(f"Copy to Clipboard {scenario_name}"):
+                    csv = summary_df.to_csv(sep='\t', index=False, header=False)
+                    st.session_state[f"{scenario_name}_csv"] = csv
+                    st.success("Data prepared for clipboard copying. Click the button below to copy.")
+                    if st.button("Copy Now"):
+                        st.write(f"Copy the data manually from here:\n\n{csv}\n")
+
+                if st.button(f"Export {scenario_name} as Excel"):
+                    self.export_excel(summary_df, scenario_name)
+
+    def export_excel(self, df, scenario_name):
+        # Create a Pandas Excel writer using XlsxWriter as the engine.
+        excel_filename = f"{scenario_name}.xlsx"
+        sheet_name = "Sheet1"
+
+        # Save the dataframe to a writer object.
+        with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        # Download the Excel file
+        with open(excel_filename, 'rb') as f:
+            data = f.read()
+        st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
+
+        # Clean up: delete the temporary Excel file
+        os.remove(excel_filename)
 
     def run_regression(self, df):
         Y = df[self.df.columns[1]].astype(float)
