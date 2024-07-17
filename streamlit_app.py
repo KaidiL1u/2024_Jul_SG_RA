@@ -37,7 +37,7 @@ class RegressionApp:
         self.total_regressions = 0
         self.completed_regressions = 0
         self.start_time = None
-        self.files_prepared = False
+        self.download_files = []
 
     def choose_file(self):
         file = st.file_uploader("Upload Excel file", type=["xlsx"])
@@ -122,6 +122,7 @@ class RegressionApp:
                     st.error(f"An error occurred: {e}")
 
         self.show_combined_results_window(all_results)
+        self.prepare_all_files_for_download(all_results)
 
     def update_progress(self, progress_bar, progress_text):
         if self.total_regressions == 0:
@@ -136,12 +137,11 @@ class RegressionApp:
                            f"Time left: {time_left:.2f} seconds. Records left to run: {self.total_regressions - self.completed_regressions}.")
 
     def show_combined_results_window(self, all_results):
-        self.files_prepared = True  # Flag to indicate files are prepared
         st.session_state["results"] = all_results
         st.experimental_rerun()
 
     def display_results_page(self):
-        if not self.files_prepared:
+        if "results" not in st.session_state:
             st.write("No results to display. Please run the regression scenarios first.")
             return
 
@@ -199,7 +199,7 @@ class RegressionApp:
 
                 st.dataframe(summary_df)
 
-    def export_and_download_excel(self, scenario_name, scenario_results):
+    def export_to_excel(self, scenario_name, scenario_results):
         summary_data = []
 
         for result in scenario_results:
@@ -250,13 +250,13 @@ class RegressionApp:
         with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
             summary_df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-        # Read the file data and remove the file after reading
-        with open(excel_filename, 'rb') as f:
-            data = f.read()
-        os.remove(excel_filename)
+        return excel_filename, summary_df
 
-        # Initiate the download
-        st.download_button(label=f"Download {scenario_name} Excel File", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    def prepare_all_files_for_download(self, all_results):
+        self.download_files = []
+        for scenario_name, scenario_results in all_results:
+            excel_filename, _ = self.export_to_excel(scenario_name, scenario_results)
+            self.download_files.append(excel_filename)
 
     def format_regression_output(self, model):
         summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
@@ -300,38 +300,24 @@ def main():
         with st.spinner("Running regression scenarios..."):
             app.run_regression_scenarios()
 
-    if "results" in st.session_state and app.files_prepared:
-        st.write("### Existing Scenarios:")
-        app.display_scenarios()
+    if "progress_text" in st.session_state:
+        st.write(st.session_state.progress_text)
 
-        st.write("### Variables:")
-        app.show_variable_selection()
+    st.write("### Existing Scenarios:")
+    app.display_scenarios()
 
+    st.write("### Variables:")
+    app.show_variable_selection()
+
+    if "results" in st.session_state:
         app.display_results_page()
 
-        all_results = st.session_state["results"]
-        st.download_button(
-            label="Download All Scenario Excel Files",
-            data=None,  # No immediate data to download
-            file_name="all_scenarios.zip",  # Name for the zip file
-            on_click=app.download_all_excel_files,
-            args=(all_results,)  # Pass all results for downloading
-        )
-
-def download_all_excel_files(all_results):
-    zip_filename = "all_scenarios.zip"
-    with zipfile.ZipFile(zip_filename, 'w') as zipf:
-        for scenario_name, scenario_results in all_results:
-            excel_filename = f"{scenario_name}.xlsx"
-            app.export_and_download_excel(scenario_name, scenario_results)
-            zipf.write(excel_filename)
-            os.remove(excel_filename)
-
-    with open(zip_filename, 'rb') as f:
-        data = f.read()
-    os.remove(zip_filename)
-
-    st.download_button(label="Download All Scenario Excel Files", data=data, file_name=zip_filename, mime='application/zip')
+        if st.button("Download All Scenario Excel Files"):
+            for excel_filename in app.download_files:
+                with open(excel_filename, 'rb') as f:
+                    data = f.read()
+                st.download_button(label=f"Download {excel_filename}", data=data, file_name=excel_filename, mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                os.remove(excel_filename)
 
 if __name__ == "__main__":
     main()
