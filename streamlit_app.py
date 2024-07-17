@@ -29,7 +29,7 @@ def run_regression(df, y_col, selected_x_vars):
         model = sm.OLS(Y, X).fit()
         return model
     except KeyError as e:
-        print(f"KeyError in run_regression: {e}")
+        st.error(f"KeyError in run_regression: {e}")
         raise
 
 def format_regression_output(model):
@@ -37,7 +37,7 @@ def format_regression_output(model):
         summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
         return summary_df
     except Exception as e:
-        print(f"Error in format_regression_output: {e}")
+        st.error(f"Error in format_regression_output: {e}")
         raise
 
 def calculate_anova_table(model):
@@ -60,12 +60,12 @@ def calculate_anova_table(model):
             'SS': [ssr, sse, sst],
             'MS': [msr, mse, np.nan],
             'F': [f_stat, np.nan, np.nan],
-            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
+            'Significance F': [p_value, np.nan, np.nan]
         }, index=['Regression', 'Residual', 'Total'])
 
         return anova_table
     except Exception as e:
-        print(f"Error in calculate_anova_table: {e}")
+        st.error(f"Error in calculate_anova_table: {e}")
         raise
 
 def process_scenario(scenario_name, years, df, y_col):
@@ -91,7 +91,7 @@ def process_scenario(scenario_name, years, df, y_col):
 
         return scenario_name, scenario_results
     except Exception as e:
-        print(f"Error in process_scenario for {scenario_name}: {e}")
+        st.error(f"Error in process_scenario for {scenario_name}: {e}")
         raise
 
 class RegressionApp:
@@ -163,7 +163,7 @@ class RegressionApp:
             elapsed_time = time.time() - start_time
             progress = min((lines_processed / total_lines) * 100, 100)
             time_left = max(estimated_time - elapsed_time, 0)
-            progress_bar.progress(progress)
+            progress_bar.progress(progress / 100)
             progress_text.write(f"Processing: {int(progress)}% complete")
             lines_processed_text.write(f"Lines processed: {lines_processed} out of {total_lines} ({time_left:.2f} seconds left)")
 
@@ -187,6 +187,7 @@ class RegressionApp:
                 except Exception as e:
                     st.error(f"Error processing future result: {e}")
 
+        st.success("Regression analysis completed!")
         self.show_combined_results_window(all_results)
 
     def show_combined_results_window(self, all_results):
@@ -236,35 +237,63 @@ class RegressionApp:
 
         for result in results:
             output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
-            full_data.append({
-                "Selected Years": ', '.join(map(str, selected_years)),
-                "R Square": f"{model.rsquared:.4f}",
-                "Adjusted R Square": f"{model.rsquared_adj:.4f}",
-                "Observations": f"{int(model.nobs)}",
-                "Selected X Variables": ', '.join(selected_x_vars),
-                "Model Summary": output_df.to_csv(index=False),
-                "ANOVA Table": anova_table.to_csv(index=False)
-            })
+            summary_data = []
 
-        full_df = pd.DataFrame(full_data)
-        self.export_excel(full_df, scenario_name)
+            # Add selected years at the top
+            summary_data.append(['Selected Years', ', '.join(map(str, selected_years))])
 
-    def export_excel(self, df, scenario_name):
-        # Create a Pandas Excel writer using XlsxWriter as the engine.
-        excel_filename = f"{scenario_name}.xlsx"
-        sheet_name = "Sheet1"
+            # Add regression statistics
+            summary_data.append(['SUMMARY OUTPUT', ''])
+            summary_data.append([''])
+            summary_data.append(['Regression Statistics', ''])
+            summary_data.append(['Multiple R', f"{model.rsquared ** 0.5:.4f}"])
+            summary_data.append(['R Square', f"{model.rsquared:.4f}"])
+            summary_data.append(['Adjusted R Square', f"{model.rsquared_adj:.4f}"])
+            summary_data.append(['Standard Error', f"{model.bse.mean():.4f}"])
+            summary_data.append(['Observations', f"{int(model.nobs)}"])
+            summary_data.append([''])
 
-        # Save the dataframe to a writer object.
-        with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            # Add ANOVA table
+            summary_data.append(['ANOVA', ''])
+            summary_data.append(['', 'df', 'SS', 'MS', 'F', 'Significance F'])
+            for index, row in anova_table.iterrows():
+                summary_data.append([str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
+            summary_data.append([''])
 
-        # Download the Excel file
-        with open(excel_filename, 'rb') as f:
+            # Add coefficients
+            summary_data.append(['', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
+            coeff_table = pd.read_html(model.summary().as_html(), header=0, index_col=0)[1].reset_index()
+
+            # Separate 'Constant' and other variables
+            constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
+            x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
+
+            # Sort remaining x variables alphabetically
+            x_vars_sorted = sorted(x_vars)
+
+            # Add 'Constant' first
+            summary_data.append([str(item) if item is not None else '' for item in constant_row])
+
+            # Add sorted x variables
+            for var in x_vars_sorted:
+                row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
+                summary_data.append([str(item) if item is not None else '' for item in row])
+
+            # Convert summary data to DataFrame
+            summary_df = pd.DataFrame(summary_data)
+            full_data.append(summary_df)
+
+        # Combine all DataFrames into one Excel file
+        with pd.ExcelWriter(f"{scenario_name}.xlsx", engine='xlsxwriter') as writer:
+            for i, df in enumerate(full_data):
+                df.to_excel(writer, sheet_name=f"Run {i+1}", index=False, header=False)
+
+        with open(f"{scenario_name}.xlsx", 'rb') as f:
             data = f.read()
-        st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
+        st.download_button(label="Download Excel File", data=data, file_name=f"{scenario_name}.xlsx")
 
         # Clean up: delete the temporary Excel file
-        os.remove(excel_filename)
+        os.remove(f"{scenario_name}.xlsx")
 
 def main():
     st.set_page_config(layout="wide")
