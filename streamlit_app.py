@@ -117,9 +117,7 @@ class RegressionApp:
 
             all_results.append((scenario_name, scenario_results))
 
-        # Store results in session state
-        st.session_state["results"] = all_results
-        st.success("Regressions completed. Results are available for review.")
+        self.show_combined_results_window(all_results)
 
     def update_progress(self, progress_bar, progress_text):
         if self.total_regressions == 0:
@@ -127,15 +125,16 @@ class RegressionApp:
         progress_percent = self.completed_regressions / self.total_regressions
         elapsed_time = time.time() - self.start_time
         estimated_total_time = (
-            (elapsed_time / self.completed_regressions) * self.total_regressions
-            if self.completed_regressions > 0
-            else 0
-        )
+                                           elapsed_time / self.completed_regressions) * self.total_regressions if self.completed_regressions > 0 else 0
         time_left = estimated_total_time - elapsed_time
 
         progress_bar.progress(progress_percent)
         progress_text.text(f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. "
                            f"Time left: {time_left:.2f} seconds. Records left to run: {self.total_regressions - self.completed_regressions}.")
+
+    def show_combined_results_window(self, all_results):
+        st.session_state["results"] = all_results
+        st.experimental_rerun()
 
     def display_results_page(self):
         if "results" not in st.session_state:
@@ -198,40 +197,97 @@ class RegressionApp:
 
                 summary_df = pd.DataFrame(summary_data)
 
-                # Display results in a text area for copy-pasting
-                st.write("### Regression Results")
-                st.text_area(f"Results for {scenario_name}", value=summary_df.to_csv(sep='\t', index=False, header=False), height=300)
+                st.dataframe(summary_df)
+
+                if st.button(f"Copy to Clipboard {scenario_name}"):
+                    csv = summary_df.to_csv(sep='\t', index=False, header=False)
+                    st.session_state[f"{scenario_name}_csv"] = csv
+                    st.success("Data prepared for clipboard copying. Click the button below to copy.")
+                    if st.button("Copy Now"):
+                        st.write(f"Copy the data manually from here:\n\n{csv}\n")
+
+                if st.button(f"Export {scenario_name} as Excel"):
+                    self.export_excel(summary_df, scenario_name)
+
+    def export_excel(self, df, scenario_name):
+        # Create a Pandas Excel writer using XlsxWriter as the engine.
+        excel_filename = f"{scenario_name}.xlsx"
+        sheet_name = "Sheet1"
+
+        # Save the dataframe to a writer object.
+        with pd.ExcelWriter(excel_filename, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        # Download the Excel file
+        with open(excel_filename, 'rb') as f:
+            data = f.read()
+        st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
+
+        # Clean up: delete the temporary Excel file
+        os.remove(excel_filename)
+
+    def run_regression(self, df):
+        Y = df[self.df.columns[1]].astype(float)
+        X = df[df.columns.difference(['Year', self.df.columns[1]])].astype(float)
+        X = sm.add_constant(X)
+        model = sm.OLS(Y, X).fit()
+        return model
 
     def format_regression_output(self, model):
-        return pd.DataFrame({
-            'Coefficient': model.params,
-            'Standard Error': model.bse,
-            't Stat': model.tvalues,
-            'P-value': model.pvalues,
-            'Lower 95%': model.conf_int()[0],
-            'Upper 95%': model.conf_int()[1]
-        })
+        summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
+        return summary_df
 
     def calculate_anova_table(self, model):
-        anova_table = sm.stats.anova_lm(model, typ=2)
+        sse = model.ssr  # Sum of squared residuals
+        ssr = model.ess  # Explained sum of squares
+        sst = ssr + sse  # Total sum of squares
+        dfe = model.df_resid  # Degrees of freedom for error
+        dfr = model.df_model  # Degrees of freedom for regression
+        dft = dfr + dfe  # Total degrees of freedom
+
+        mse = sse / dfe  # Mean squared error
+        msr = ssr / dfr  # Mean squared regression
+
+        f_stat = msr / mse  # F-statistic
+        p_value = model.f_pvalue  # P-value for the F-statistic
+
+        anova_table = pd.DataFrame({
+            'df': [dfr, dfe, dft],
+            'SS': [ssr, sse, sst],
+            'MS': [msr, mse, np.nan],
+            'F': [f_stat, np.nan, np.nan],
+            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
+        }, index=['Regression', 'Residual', 'Total'])
+
         return anova_table
 
+
 def main():
+    st.set_page_config(layout="wide")
+
     app = RegressionApp()
 
-    st.sidebar.title("Regression App")
-    option = st.sidebar.radio("Choose an option", ["Upload File", "Variable Selection", "Scenarios", "Run Regression", "View Results"])
+    st.title("SG2024 Regression Analysis Tool")
 
-    if option == "Upload File":
-        app.choose_file()
-    elif option == "Variable Selection":
-        app.show_variable_selection()
-    elif option == "Scenarios":
-        app.display_scenarios()
-    elif option == "Run Regression":
-        app.run_regression_scenarios()
-    elif option == "View Results":
+    st.write("### Upload Xlsx Source File:")
+    app.choose_file()
+
+    if st.button("Run Regression Scenarios"):
+        with st.spinner("Running regression scenarios..."):
+            app.run_regression_scenarios()
+
+    if "progress_text" in st.session_state:
+        st.write(st.session_state.progress_text)
+
+    st.write("### Existing Scenarios:")
+    app.display_scenarios()
+
+    st.write("### Variables:")
+    app.show_variable_selection()
+
+    if "results" in st.session_state:
         app.display_results_page()
+
 
 if __name__ == "__main__":
     main()
