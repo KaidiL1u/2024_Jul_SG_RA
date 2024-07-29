@@ -117,7 +117,9 @@ class RegressionApp:
 
             all_results.append((scenario_name, scenario_results))
 
-        self.show_combined_results_window(all_results)
+        # Store results in session state
+        st.session_state["results"] = all_results
+        st.success("Regressions completed. Results are available for review.")
 
     def update_progress(self, progress_bar, progress_text):
         if self.total_regressions == 0:
@@ -125,146 +127,111 @@ class RegressionApp:
         progress_percent = self.completed_regressions / self.total_regressions
         elapsed_time = time.time() - self.start_time
         estimated_total_time = (
-                                           elapsed_time / self.completed_regressions) * self.total_regressions if self.completed_regressions > 0 else 0
+            (elapsed_time / self.completed_regressions) * self.total_regressions
+            if self.completed_regressions > 0
+            else 0
+        )
         time_left = estimated_total_time - elapsed_time
 
         progress_bar.progress(progress_percent)
         progress_text.text(f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. "
                            f"Time left: {time_left:.2f} seconds. Records left to run: {self.total_regressions - self.completed_regressions}.")
 
-    def show_combined_results_window(self, all_results):
-        st.session_state["results"] = all_results
-        st.experimental_rerun()
-
     def display_results_page(self):
-    if "results" not in st.session_state:
-        st.write("No results to display. Please run the regression scenarios first.")
-        return
+        if "results" not in st.session_state:
+            st.write("No results to display. Please run the regression scenarios first.")
+            return
 
-    all_results = st.session_state["results"]
+        all_results = st.session_state["results"]
 
-    # Prepare to display up to 5 scenarios
-    num_tabs = min(5, len(all_results))
-    tab_titles = [f"Scenario: {name}" for name, _ in all_results[:num_tabs]]
-    tabs = st.tabs(tab_titles)
+        # Prepare to display up to 5 scenarios
+        num_tabs = min(5, len(all_results))
+        tab_titles = [f"Scenario: {name}" for name, _ in all_results[:num_tabs]]
+        tabs = st.tabs(tab_titles)
 
-    for tab, (scenario_name, scenario_results) in zip(tabs, all_results[:num_tabs]):
-        with tab:
-            summary_data = []
+        for tab, (scenario_name, scenario_results) in zip(tabs, all_results[:num_tabs]):
+            with tab:
+                summary_data = []
 
-            for result in scenario_results:
-                output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
+                for result in scenario_results:
+                    output_df, selected_years, y_variable_name, model, anova_table, selected_x_vars, idx = result
 
-                # Add selected years at the top
-                summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
-                summary_data.append(['', 'SUMMARY OUTPUT', ''])
+                    # Add selected years at the top
+                    summary_data.append(['', 'Selected Years', ', '.join(map(str, selected_years))])
+                    summary_data.append(['', 'SUMMARY OUTPUT', ''])
 
-                summary_data.append(['', 'Regression Statistics', ''])
-                summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
-                summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
-                summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
-                summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
-                summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
+                    summary_data.append(['', 'Regression Statistics', ''])
+                    summary_data.append(['', 'Multiple R', f"{model.rsquared ** 0.5:.4f}"])
+                    summary_data.append([f"S{idx}R^2", 'R Square', f"{model.rsquared:.4f}"])
+                    summary_data.append(['', 'Adjusted R Square', f"{model.rsquared_adj:.4f}"])
+                    summary_data.append([f"S{idx}SE", 'Standard Error of the Regression', f"{model.scale ** 0.5:.4f}"])
+                    summary_data.append(['', 'Observations', f"{int(model.nobs)}"])
 
-                # Add ANOVA table
-                summary_data.append(['', 'ANOVA', ''])
-                summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
-                for index, row in anova_table.iterrows():
+                    # Add ANOVA table
+                    summary_data.append(['', 'ANOVA', ''])
+                    summary_data.append(['', '', 'df', 'SS', 'MS', 'F', 'Significance F'])
+                    for index, row in anova_table.iterrows():
+                        summary_data.append(
+                            ['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
+
+                    # Add coefficients if available
+                    coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[
+                        0].reset_index()
                     summary_data.append(
-                        ['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
+                        ['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
 
-                # Add coefficients if available
-                coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[
-                    0].reset_index()
-                summary_data.append(
-                    ['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
+                    # Separate 'Constant' and other variables
+                    constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
+                    x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
 
-                # Separate 'Constant' and other variables
-                constant_row = coeff_table[coeff_table.iloc[:, 0] == 'const'].iloc[0].tolist()
-                x_vars = coeff_table[coeff_table.iloc[:, 0] != 'const'].iloc[:, 0].tolist()
+                    # Sort remaining x variables alphabetically
+                    x_vars_sorted = sorted(x_vars)
 
-                # Sort remaining x variables alphabetically
-                x_vars_sorted = sorted(x_vars)
+                    # Add 'Constant' first
+                    summary_data.append(
+                        [f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
 
-                # Add 'Constant' first
-                summary_data.append(
-                    [f"S{idx}Const"] + [str(item) if item is not None else '' for item in constant_row])
+                    # Add sorted x variables
+                    for i, var in enumerate(x_vars_sorted, start=1):
+                        row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
+                        summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
 
-                # Add sorted x variables
-                for i, var in enumerate(x_vars_sorted, start=1):
-                    row = coeff_table[coeff_table.iloc[:, 0] == var].iloc[0].tolist()
-                    summary_data.append([f"S{idx}X{i}"] + [str(item) if item is not None else '' for item in row])
+                summary_df = pd.DataFrame(summary_data)
 
-            summary_df = pd.DataFrame(summary_data)
-
-            # Display results in a text area for copy-pasting
-            st.write("### Regression Results")
-            st.text_area(f"Results for {scenario_name}", value=summary_df.to_csv(sep='\t', index=False, header=False), height=300)
-
-
-
-    def run_regression(self, df):
-        Y = df[self.df.columns[1]].astype(float)
-        X = df[df.columns.difference(['Year', self.df.columns[1]])].astype(float)
-        X = sm.add_constant(X)
-        model = sm.OLS(Y, X).fit()
-        return model
+                # Display results in a text area for copy-pasting
+                st.write("### Regression Results")
+                st.text_area(f"Results for {scenario_name}", value=summary_df.to_csv(sep='\t', index=False, header=False), height=300)
 
     def format_regression_output(self, model):
-        summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
-        return summary_df
+        return pd.DataFrame({
+            'Coefficient': model.params,
+            'Standard Error': model.bse,
+            't Stat': model.tvalues,
+            'P-value': model.pvalues,
+            'Lower 95%': model.conf_int()[0],
+            'Upper 95%': model.conf_int()[1]
+        })
 
     def calculate_anova_table(self, model):
-        sse = model.ssr  # Sum of squared residuals
-        ssr = model.ess  # Explained sum of squares
-        sst = ssr + sse  # Total sum of squares
-        dfe = model.df_resid  # Degrees of freedom for error
-        dfr = model.df_model  # Degrees of freedom for regression
-        dft = dfr + dfe  # Total degrees of freedom
-
-        mse = sse / dfe  # Mean squared error
-        msr = ssr / dfr  # Mean squared regression
-
-        f_stat = msr / mse  # F-statistic
-        p_value = model.f_pvalue  # P-value for the F-statistic
-
-        anova_table = pd.DataFrame({
-            'df': [dfr, dfe, dft],
-            'SS': [ssr, sse, sst],
-            'MS': [msr, mse, np.nan],
-            'F': [f_stat, np.nan, np.nan],
-            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
-        }, index=['Regression', 'Residual', 'Total'])
-
+        anova_table = sm.stats.anova_lm(model, typ=2)
         return anova_table
 
-
 def main():
-    st.set_page_config(layout="wide")
-
     app = RegressionApp()
 
-    st.title("SG2024 Regression Analysis Tool")
+    st.sidebar.title("Regression App")
+    option = st.sidebar.radio("Choose an option", ["Upload File", "Variable Selection", "Scenarios", "Run Regression", "View Results"])
 
-    st.write("### Upload Xlsx Source File:")
-    app.choose_file()
-
-    if st.button("Run Regression Scenarios"):
-        with st.spinner("Running regression scenarios..."):
-            app.run_regression_scenarios()
-
-    if "progress_text" in st.session_state:
-        st.write(st.session_state.progress_text)
-
-    st.write("### Existing Scenarios:")
-    app.display_scenarios()
-
-    st.write("### Variables:")
-    app.show_variable_selection()
-
-    if "results" in st.session_state:
+    if option == "Upload File":
+        app.choose_file()
+    elif option == "Variable Selection":
+        app.show_variable_selection()
+    elif option == "Scenarios":
+        app.display_scenarios()
+    elif option == "Run Regression":
+        app.run_regression_scenarios()
+    elif option == "View Results":
         app.display_results_page()
-
 
 if __name__ == "__main__":
     main()
