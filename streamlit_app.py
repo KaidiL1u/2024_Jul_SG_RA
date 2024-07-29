@@ -43,7 +43,7 @@ class RegressionApp:
         file = st.file_uploader("Upload Excel file", type=["xlsx"])
         if file:
             self.df = pd.read_excel(file, sheet_name="Sheet1")
-            self.variables = self.df.columns[2:].tolist()  # Assuming variables start from column C
+            self.variables = self.df.columns[2:].tolist()
             st.write("### Columns in the uploaded file:")
             st.write(self.df.columns.tolist())
 
@@ -52,18 +52,20 @@ class RegressionApp:
             st.warning("Please upload an Excel file first.")
             return
 
-        self.variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
+        self.variables = self.df.columns[2:].tolist()
         self.num_combinations = sum(
             [len(list(itertools.combinations(self.variables, i))) for i in range(1, len(self.variables) + 1)])
         self.total_regressions = len(self.scenarios) * self.num_combinations
 
-        st.subheader(f"{len(self.variables)} variables found.")
-        st.subheader(f"Regression will create {self.num_combinations} variable combinations "
-                     f"(Total Regressions: {self.total_regressions}).")
-
-        st.write("### Variables:")
-        for var in self.variables:
-            st.write(f"- {var}")
+        if self.total_regressions == 0:
+            st.warning("No regression scenarios to run based on the current data and setup.")
+        else:
+            st.subheader(f"{len(self.variables)} variables found.")
+            st.subheader(f"Regression will create {self.num_combinations} variable combinations "
+                         f"(Total Regressions: {self.total_regressions}).")
+            st.write("### Variables:")
+            for var in self.variables:
+                st.write(f"- {var}")
 
     def display_scenarios(self):
         all_years = list(range(2001, 2024))
@@ -74,43 +76,19 @@ class RegressionApp:
 
         st.table(scenario_df.T)
 
-def run_regression_scenarios(self):
-    if self.df is None:
-        st.warning("Please upload an Excel file first.")
-        return
+    def run_regression_scenarios(self):
+        if self.df is None:
+            st.warning("Please upload an Excel file first.")
+            return
 
-    if 'Year' not in self.df.columns:
-        st.error("The 'Year' column is missing from the uploaded file.")
-        return
+        if 'Year' not in self.df.columns:
+            st.error("The 'Year' column is missing from the uploaded file.")
+            return
 
-    all_results = []
-    self.start_time = time.time()
-    progress_bar = st.progress(0)
-    progress_text = st.empty()
-
-    for scenario_name, years in self.scenarios.items():
-        df_selected = self.df[self.df['Year'].isin(years)]
-        variables = self.df.columns[2:].tolist()
-        combinations = list(itertools.chain.from_iterable(
-            itertools.combinations(variables, r) for r in range(1, len(variables) + 1)
-        ))
-
-        scenario_results = []
-        for idx, selected_x_vars in enumerate(combinations, start=1):
-            model = run_single_regression(df_selected, self.df.columns[1], list(selected_x_vars))
-            output_df = self.format_regression_output(model)
-            if output_df.empty:
-                st.warning(f"Could not compute output for model with variables {selected_x_vars}")
-                continue
-            anova_table = self.calculate_anova_table(model)
-            scenario_results.append(
-                (output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
-            self.completed_regressions += 1
-            self.update_progress(progress_bar, progress_text)
-
-        all_results.append((scenario_name, scenario_results))
-
-    st.session_state["results"] = all_results
+        all_results = []
+        self.start_time = time.time()
+        progress_bar = st.progress(0)
+        progress_text = st.empty()
 
         for scenario_name, years in self.scenarios.items():
             df_selected = self.df[self.df['Year'].isin(years)]
@@ -123,6 +101,9 @@ def run_regression_scenarios(self):
             for idx, selected_x_vars in enumerate(combinations, start=1):
                 model = run_single_regression(df_selected, self.df.columns[1], list(selected_x_vars))
                 output_df = self.format_regression_output(model)
+                if output_df.empty:
+                    st.warning(f"Could not compute output for model with variables {selected_x_vars}")
+                    continue
                 anova_table = self.calculate_anova_table(model)
                 scenario_results.append(
                     (output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
@@ -133,21 +114,20 @@ def run_regression_scenarios(self):
 
         st.session_state["results"] = all_results
 
-def update_progress(self, progress_bar, progress_text):
-    if self.total_regressions > 0:
-        progress_percent = self.completed_regressions / self.total_regressions
-        elapsed_time = time.time() - self.start_time
-        estimated_total_time = elapsed_time * self.total_regressions / self.completed_regressions
-        time_left = estimated_total_time - elapsed_time
+    def update_progress(self, progress_bar, progress_text):
+        if self.total_regressions > 0:
+            progress_percent = self.completed_regressions / self.total_regressions
+            elapsed_time = time.time() - self.start_time
+            estimated_total_time = elapsed_time * self.total_regressions / self.completed_regressions
+            time_left = estimated_total_time - elapsed_time
 
-        progress_bar.progress(progress_percent)
-        progress_text.text(f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. "
-                           f"Time left: {time_left:.2f} seconds. Records left to run: "
-                           f"{self.total_regressions - self.completed_regressions}.")
-    else:
-        progress_bar.progress(0)
-        progress_text.text("No regressions to run.")
-
+            progress_bar.progress(progress_percent)
+            progress_text.text(f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. "
+                               f"Time left: {time_left:.2f} seconds. Records left to run: "
+                               f"{self.total_regressions - self.completed_regressions}.")
+        else:
+            progress_bar.progress(0)
+            progress_text.text("No regressions to run.")
 
     def display_results_page(self):
         if "results" not in st.session_state:
@@ -210,15 +190,14 @@ def update_progress(self, progress_bar, progress_text):
         st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
         os.remove(excel_filename)
 
-def format_regression_output(self, model):
-    try:
-        summary_html = model.summary().tables[1].as_html()
-        summary_df = pd.read_html(summary_html, header=0, index_col=0)[0]
-        return summary_df
-    except Exception as e:
-        st.error("Failed to format regression output: " + str(e))
-        return pd.DataFrame()  # Return an empty DataFrame on failure
-
+    def format_regression_output(self, model):
+        try:
+            summary_html = model.summary().tables[1].as_html()
+            summary_df = pd.read_html(summary_html, header=0, index_col=0)[0]
+            return summary_df
+        except Exception as e:
+            st.error("Failed to format regression output: " + str(e))
+            return pd.DataFrame()  # Return an empty DataFrame on failure
 
     def calculate_anova_table(self, model):
         sse = model.ssr
