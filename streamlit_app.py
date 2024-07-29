@@ -21,14 +21,12 @@ predefined_years = {
                                                          year not in {2009, 2013, 2020, 2021, 2022}]
 }
 
-
 def run_single_regression(df, y_var, x_vars):
     Y = df[y_var].astype(float)
     X = df[x_vars].astype(float)
     X = sm.add_constant(X)
     model = sm.OLS(Y, X).fit()
     return model
-
 
 class RegressionApp:
     def __init__(self):
@@ -93,9 +91,6 @@ class RegressionApp:
         progress_text = st.empty()
 
         for scenario_name, years in self.scenarios.items():
-            if not years:  # If years selection is empty, use predefined years
-                years = predefined_years[scenario_name]
-
             df_selected = self.df[self.df['Year'].isin(years)]
             variables = self.df.columns[2:].tolist()  # Assuming variables start from column C onwards
             num_variables = len(variables)
@@ -117,7 +112,7 @@ class RegressionApp:
 
             all_results.append((scenario_name, scenario_results))
 
-        self.show_combined_results_window(all_results)
+        st.session_state["results"] = all_results
 
     def update_progress(self, progress_bar, progress_text):
         if self.total_regressions == 0:
@@ -125,16 +120,12 @@ class RegressionApp:
         progress_percent = self.completed_regressions / self.total_regressions
         elapsed_time = time.time() - self.start_time
         estimated_total_time = (
-                                           elapsed_time / self.completed_regressions) * self.total_regressions if self.completed_regressions > 0 else 0
+            elapsed_time / self.completed_regressions) * self.total_regressions if self.completed_regressions > 0 else 0
         time_left = estimated_total_time - elapsed_time
 
         progress_bar.progress(progress_percent)
         progress_text.text(f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. "
                            f"Time left: {time_left:.2f} seconds. Records left to run: {self.total_regressions - self.completed_regressions}.")
-
-    def show_combined_results_window(self, all_results):
-        st.session_state["results"] = all_results
-        st.experimental_rerun()
 
     def display_results_page(self):
         if "results" not in st.session_state:
@@ -174,8 +165,7 @@ class RegressionApp:
                             ['', str(index)] + [str(item) if item is not None else '' for item in row.tolist()])
 
                     # Add coefficients if available
-                    coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[
-                        0].reset_index()
+                    coeff_table = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0].reset_index()
                     summary_data.append(
                         ['', '', 'Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'])
 
@@ -255,7 +245,7 @@ class RegressionApp:
             'df': [dfr, dfe, dft],
             'SS': [ssr, sse, sst],
             'MS': [msr, mse, np.nan],
-            'F': [f_stat, np.nan, np.nan],
+            'F': [f_stat, np.nan, np_nan],
             'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
         }, index=['Regression', 'Residual', 'Total'])
 
@@ -264,25 +254,16 @@ class RegressionApp:
 
 def main():
     st.set_page_config(layout="wide")
-
     app = RegressionApp()
 
     st.title("SG2024 Regression Analysis Tool")
-
-    st.write("### Upload Xlsx Source File:")
     app.choose_file()
 
     if st.button("Run Regression Scenarios"):
         with st.spinner("Running regression scenarios..."):
             app.run_regression_scenarios()
 
-    if "progress_text" in st.session_state:
-        st.write(st.session_state.progress_text)
-
-    st.write("### Existing Scenarios:")
     app.display_scenarios()
-
-    st.write("### Variables:")
     app.show_variable_selection()
 
     if "results" in st.session_state:
