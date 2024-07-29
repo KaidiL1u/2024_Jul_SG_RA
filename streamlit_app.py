@@ -74,19 +74,43 @@ class RegressionApp:
 
         st.table(scenario_df.T)
 
-    def run_regression_scenarios(self):
-        if self.df is None:
-            st.warning("Please upload an Excel file first.")
-            return
+def run_regression_scenarios(self):
+    if self.df is None:
+        st.warning("Please upload an Excel file first.")
+        return
 
-        if 'Year' not in self.df.columns:
-            st.error("The 'Year' column is missing from the uploaded file.")
-            return
+    if 'Year' not in self.df.columns:
+        st.error("The 'Year' column is missing from the uploaded file.")
+        return
 
-        all_results = []
-        self.start_time = time.time()
-        progress_bar = st.progress(0)
-        progress_text = st.empty()
+    all_results = []
+    self.start_time = time.time()
+    progress_bar = st.progress(0)
+    progress_text = st.empty()
+
+    for scenario_name, years in self.scenarios.items():
+        df_selected = self.df[self.df['Year'].isin(years)]
+        variables = self.df.columns[2:].tolist()
+        combinations = list(itertools.chain.from_iterable(
+            itertools.combinations(variables, r) for r in range(1, len(variables) + 1)
+        ))
+
+        scenario_results = []
+        for idx, selected_x_vars in enumerate(combinations, start=1):
+            model = run_single_regression(df_selected, self.df.columns[1], list(selected_x_vars))
+            output_df = self.format_regression_output(model)
+            if output_df.empty:
+                st.warning(f"Could not compute output for model with variables {selected_x_vars}")
+                continue
+            anova_table = self.calculate_anova_table(model)
+            scenario_results.append(
+                (output_df, years, self.df.columns[1], model, anova_table, selected_x_vars, idx))
+            self.completed_regressions += 1
+            self.update_progress(progress_bar, progress_text)
+
+        all_results.append((scenario_name, scenario_results))
+
+    st.session_state["results"] = all_results
 
         for scenario_name, years in self.scenarios.items():
             df_selected = self.df[self.df['Year'].isin(years)]
@@ -186,9 +210,15 @@ def update_progress(self, progress_bar, progress_text):
         st.download_button(label="Download Excel File", data=data, file_name=excel_filename)
         os.remove(excel_filename)
 
-    def format_regression_output(self, model):
-        summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
+def format_regression_output(self, model):
+    try:
+        summary_html = model.summary().tables[1].as_html()
+        summary_df = pd.read_html(summary_html, header=0, index_col=0)[0]
         return summary_df
+    except Exception as e:
+        st.error("Failed to format regression output: " + str(e))
+        return pd.DataFrame()  # Return an empty DataFrame on failure
+
 
     def calculate_anova_table(self, model):
         sse = model.ssr
