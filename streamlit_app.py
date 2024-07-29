@@ -109,7 +109,8 @@ class RegressionApp:
 
         st.session_state["results"] = all_results
 
-    def update_progress(self, progress_bar, progress_text):
+def update_progress(self, progress_bar, progress_text):
+    if self.total_regressions > 0:
         progress_percent = self.completed_regressions / self.total_regressions
         elapsed_time = time.time() - self.start_time
         estimated_total_time = elapsed_time * self.total_regressions / self.completed_regressions
@@ -119,6 +120,10 @@ class RegressionApp:
         progress_text.text(f"Completed {self.completed_regressions} out of {self.total_regressions} regressions. "
                            f"Time left: {time_left:.2f} seconds. Records left to run: "
                            f"{self.total_regressions - self.completed_regressions}.")
+    else:
+        progress_bar.progress(0)
+        progress_text.text("No regressions to run.")
+
 
     def display_results_page(self):
         if "results" not in st.session_state:
