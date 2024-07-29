@@ -227,29 +227,30 @@ class RegressionApp:
         summary_df = pd.read_html(model.summary().tables[1].as_html(), header=0, index_col=0)[0]
         return summary_df
 
-    def calculate_anova_table(self, model):
-        sse = model.ssr  # Sum of squared residuals
-        ssr = model.ess  # Explained sum of squares
-        sst = ssr + sse  # Total sum of squares
-        dfe = model.df_resid  # Degrees of freedom for error
-        dfr = model.df_model  # Degrees of freedom for regression
-        dft = dfr + dfe  # Total degrees of freedom
+def calculate_anova_table(self, model):
+    sse = model.ssr  # Sum of squared residuals
+    ssr = model.ess  # Explained sum of squares
+    sst = ssr + sse  # Total sum of squares
+    dfe = model.df_resid  # Degrees of freedom for error
+    dfr = model.df_model  # Degrees of freedom for regression
+    dft = dfr + dfe  # Total degrees of freedom
 
-        mse = sse / dfe  # Mean squared error
-        msr = ssr / dfr  # Mean squared regression
+    mse = sse / dfe  # Mean squared error
+    msr = ssr / dfr  # Mean squared regression
 
-        f_stat = msr / mse  # F-statistic
-        p_value = model.f_pvalue  # P-value for the F-statistic
+    f_stat = msr / mse  # F-statistic
+    p_value = model.f_pvalue  # P-value for the F-statistic
 
-        anova_table = pd.DataFrame({
-            'df': [dfr, dfe, dft],
-            'SS': [ssr, sse, sst],
-            'MS': [msr, mse, np.nan],
-            'F': [f_stat, np.nan, np_nan],
-            'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
-        }, index=['Regression', 'Residual', 'Total'])
+    anova_table = pd.DataFrame({
+        'df': [dfr, dfe, dft],
+        'SS': [ssr, sse, sst],
+        'MS': [msr, mse, np.nan],
+        'F': [f_stat, np.nan, np.nan],
+        'Significance F': [f"{p_value:.4f}", np.nan, np.nan]
+    }, index=['Regression', 'Residual', 'Total'])
 
-        return anova_table
+    return anova_table
+
 
 
 def main():
